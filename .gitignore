@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.next/
+.env
+*.log
+.DS_Store
+__pycache__/
+*.egg-info/
+
+# Large data files (generated, not source)
+server/src/data/voronoi-mesh.json
+server/src/data/land-grid.json
+server/src/data/earth-borders.json
+web/public/land-grid.json
+web/public/mesh-index.json
+web/public/land.geojson
+server/src/db/seed-dense.sql
+.claude/ralph-loop.local.md
