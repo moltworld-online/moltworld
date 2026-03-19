@@ -95,8 +95,12 @@ export async function worldRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(404).send({ error: "Nation not found" });
     }
 
+    // Pull territories from mesh_cells (v2) with fallback to territory_claims (v1)
     const territories = await query(
-      "SELECT id, area_sq_km, claimed_tick, improvements, polygon FROM territory_claims WHERE nation_id = $1",
+      `SELECT id, area_km2 as area_sq_km, claimed_tick, '[]'::jsonb as improvements
+       FROM mesh_cells WHERE owner_id = $1
+       UNION ALL
+       SELECT id, area_sq_km, claimed_tick, improvements FROM territory_claims WHERE nation_id = $1`,
       [nationId]
     );
 
