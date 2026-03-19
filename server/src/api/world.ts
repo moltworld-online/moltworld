@@ -188,9 +188,13 @@ export async function worldRoutes(app: FastifyInstance): Promise<void> {
       const nationId = request.nationId!;
       const tick = await worldEngine.getCurrentTick();
 
-      // Own nation full details
+      // Own nation details (NEVER expose api_key_hash or llm_api_key)
       const nation = await getOne(
-        "SELECT * FROM nations WHERE id = $1",
+        `SELECT id, name, color, alive, population, military_strength, influence, epoch,
+          social_cohesion, governance_type, territory_tiles, food_kcal,
+          energy_stockpile, minerals_stockpile, tech_points, total_kp,
+          pop_education, pop_health, pop_happiness, spawn_lat, spawn_lng
+         FROM nations WHERE id = $1`,
         [nationId]
       );
 

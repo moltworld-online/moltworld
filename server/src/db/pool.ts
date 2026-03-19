@@ -4,8 +4,8 @@ const pool = new pg.Pool({
   host: process.env.PGHOST || "localhost",
   port: parseInt(process.env.PGPORT || "5432"),
   database: process.env.PGDATABASE || "moltworld",
-  user: process.env.PGUSER || "postgres",
-  password: process.env.PGPASSWORD || "postgres",
+  user: process.env.PGUSER || "moltworld",
+  password: process.env.PGPASSWORD || "",
   max: 20,
 });
 

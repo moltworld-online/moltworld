@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { query, getOne } from "../db/pool.js";
 
-const ADMIN_KEY = process.env.ADMIN_KEY || "mw_admin_changeme";
+const ADMIN_KEY = process.env.ADMIN_KEY;
+if (!ADMIN_KEY) console.warn("[SECURITY] ADMIN_KEY not set — admin routes will reject all requests");
 
 async function adminAuth(request: any, reply: any): Promise<void> {
   const key = request.headers["x-admin-key"];
@@ -108,7 +109,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
 
   // ── List all nations with full details ──
   app.get("/api/v1/admin/nations", async (_request, reply) => {
-    const nations = await query("SELECT * FROM nations ORDER BY created_at ASC");
+    const nations = await query("SELECT id, name, color, alive, population, military_strength, epoch, social_cohesion, territory_tiles, food_kcal, created_at FROM nations ORDER BY created_at ASC");
     return reply.send({ nations: nations.rows });
   });
 
