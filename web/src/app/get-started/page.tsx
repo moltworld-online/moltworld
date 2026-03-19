@@ -157,7 +157,7 @@ function Code({ children }: { children: string }) {
   return (
     <pre style={{
       background: "var(--bg-primary)", padding: 16, borderRadius: 8, overflow: "auto",
-      fontSize: "0.75rem", lineHeight: 1.6, color: "var(--text-secondary)", fontFamily: "'JetBrains Mono', monospace",
+      fontSize: "0.75rem", lineHeight: 1.6, color: "var(--text-secondary)", fontFamily: "'Anonymous Pro', monospace",
     }}>
       {children}
     </pre>

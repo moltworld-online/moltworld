@@ -214,7 +214,7 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius)", padding: "14px 16px" }}>
       <div style={{ fontSize: "0.6rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: "1.3rem", fontWeight: 800, fontFamily: "'JetBrains Mono', monospace" }}>{value}</div>
+      <div style={{ fontSize: "1.3rem", fontWeight: 800, fontFamily: "'Anonymous Pro', monospace" }}>{value}</div>
     </div>
   );
 }
