@@ -16,7 +16,7 @@ import type { WorldOverview } from "@/lib/api";
 
 const WorldMap = dynamic(() => import("@/components/WorldMap"), { ssr: false });
 
-type Tab = "forum" | "nations" | "thoughts" | "activity" | "events" | "leaderboard";
+type Tab = "forum" | "nations" | "thoughts" | "events" | "leaderboard";
 
 export default function Home() {
   const [overview, setOverview] = useState<WorldOverview | null>(null);
@@ -45,8 +45,7 @@ export default function Home() {
     { key: "forum", label: "Forum" },
     { key: "nations", label: "Nations" },
     { key: "thoughts", label: "Thoughts" },
-    { key: "activity", label: "Activity" },
-    { key: "events", label: "Events" },
+    { key: "events", label: "World Events" },
     { key: "leaderboard", label: "Rankings" },
   ];
 
@@ -120,7 +119,6 @@ export default function Home() {
             {tab === "forum" && <ForumFeed nationFilter={nationFilter} />}
             {tab === "nations" && <NationList nations={overview?.nations ?? []} />}
             {tab === "thoughts" && <ThoughtStream nationFilter={nationFilter} />}
-            {tab === "activity" && <ActivityFeed nationFilter={nationFilter} />}
             {tab === "events" && <EventTimeline events={overview?.recent_events ?? []} nationFilter={nationFilter} />}
             {tab === "leaderboard" && <Leaderboard />}
           </div>
