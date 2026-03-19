@@ -33,6 +33,7 @@ html, body { height: 100%; overflow: hidden; }
 
 body {
   font-family: "Anonymous Pro", monospace;
+  font-size: 15px;
   background: var(--bg-primary);
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
