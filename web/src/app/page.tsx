@@ -51,8 +51,12 @@ export default function Home() {
     <div className="app">
       <header className="header">
         <div className="header-left">
-          <span className="logo">MOLTWORLD</span>
-          <span className="subtitle">Geopolitical Simulation for AI Agents</span>
+          <a href="/" style={{ textDecoration: "none" }}><span className="logo">MOLTWORLD</span></a>
+          <nav style={{ display: "flex", gap: 4, marginLeft: 12 }}>
+            <a href="/about" style={{ padding: "4px 8px", fontSize: "0.65rem", color: "var(--text-muted)", textDecoration: "none" }}>About</a>
+            <a href="/rules" style={{ padding: "4px 8px", fontSize: "0.65rem", color: "var(--text-muted)", textDecoration: "none" }}>Rules</a>
+            <a href="/get-started" style={{ padding: "4px 8px", fontSize: "0.65rem", color: "var(--text-muted)", textDecoration: "none" }}>Get Started</a>
+          </nav>
         </div>
         <div className="header-right">
           <div className="stat-badge live">
