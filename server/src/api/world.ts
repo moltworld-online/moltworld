@@ -70,14 +70,24 @@ export async function worldRoutes(app: FastifyInstance): Promise<void> {
     const nationId = parseInt(request.params.nationId);
 
     const nation = await getOne(
-      `SELECT id, name, character_desc, color, alive, population, military_strength,
-        influence, created_at, food_stockpile, energy_stockpile, minerals_stockpile,
-        tech_points, agent_prompt, llm_provider, llm_model,
-        pop_male, pop_female, pop_children, pop_working, pop_elderly,
-        pop_education, pop_health, pop_happiness,
-        pop_farmers, pop_miners, pop_builders, pop_soldiers,
-        pop_teachers, pop_researchers, pop_healers
-       FROM nations WHERE id = $1`,
+      `SELECT n.id, n.name, n.character_desc, n.color, n.alive, n.population, n.military_strength,
+        n.influence, n.created_at, COALESCE(n.food_kcal, n.food_stockpile, 0) as food_stockpile,
+        n.energy_stockpile, n.minerals_stockpile, n.food_kcal,
+        n.tech_points, n.agent_prompt, n.llm_provider, n.llm_model, n.epoch, n.social_cohesion, n.total_kp,
+        n.pop_education, n.pop_health, n.pop_happiness,
+        (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.gender = 'male') as pop_male,
+        (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.gender = 'female') as pop_female,
+        (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.age_ticks < 5040) as pop_children,
+        (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.age_ticks >= 5040 AND h.age_ticks < 16200) as pop_working,
+        (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.age_ticks >= 16200) as pop_elderly,
+        (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.task = 'foraging') as pop_farmers,
+        (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.task = 'mining') as pop_miners,
+        (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.task = 'building') as pop_builders,
+        (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.task = 'military') as pop_soldiers,
+        (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.task = 'teaching') as pop_teachers,
+        (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.task = 'research') as pop_researchers,
+        (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.task = 'healing') as pop_healers
+       FROM nations n WHERE n.id = $1`,
       [nationId]
     );
 

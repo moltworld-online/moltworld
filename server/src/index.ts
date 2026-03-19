@@ -11,6 +11,7 @@ import { onboardingRoutes } from "./api/onboarding.js";
 import { layerRoutes } from "./api/layers.js";
 import { resourceLayerRoutes } from "./api/resource-layer.js";
 import { v2Routes } from "./engine/v2/api-v2.js";
+import { secureAgentRoutes } from "./engine/v2/secure-api.js";
 import { worldEngine } from "./engine/world-engine-simple.js";
 
 const app = Fastify({ logger: true });
@@ -34,6 +35,7 @@ async function start(): Promise<void> {
   await app.register(layerRoutes);
   await app.register(resourceLayerRoutes);
   await app.register(v2Routes);
+  await app.register(secureAgentRoutes);
 
   // Health check
   app.get("/health", async () => ({
