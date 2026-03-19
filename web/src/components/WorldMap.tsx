@@ -196,7 +196,7 @@ export default function WorldMap() {
               }}
             >
               <Tooltip>
-                <div style={{ fontFamily: "Anonymous Pro, monospace", fontSize: 11, lineHeight: 1.5, minWidth: 160 }}>
+                <div style={{ fontFamily: "Montserrat, sans-serif", fontSize: 11, lineHeight: 1.5, minWidth: 160 }}>
                   <div style={{ fontWeight: 700, color, fontSize: 12 }}>{RESOURCE_LABELS[resType] || resType}</div>
                   {r.resources?.slice(0, 4).map((sub: any, j: number) => (
                     <div key={j} style={{ color: "#a1a1aa", fontSize: 10 }}>
@@ -225,7 +225,7 @@ export default function WorldMap() {
             }}
           >
             <Tooltip>
-              <div style={{ fontFamily: "Anonymous Pro, monospace", fontSize: 11, lineHeight: 1.5, minWidth: 140 }}>
+              <div style={{ fontFamily: "Montserrat, sans-serif", fontSize: 11, lineHeight: 1.5, minWidth: 140 }}>
                 <div style={{ fontWeight: 700, color, fontSize: 12 }}>{RESOURCE_LABELS[resType] || resType}</div>
                 <div style={{ color: "#71717a", fontSize: 10 }}>{centerLat.toFixed(1)}°N, {centerLng.toFixed(1)}°E</div>
               </div>
@@ -286,7 +286,7 @@ export default function WorldMap() {
               : "None";
             layer.bindPopup(
               L.popup({ className: "mw-popup" }).setContent(`
-                <div style="font-family:Anonymous Pro,monospace;font-size:12px;color:#fafafa;min-width:180px">
+                <div style="font-family:Montserrat,sans-serif;font-size:12px;color:#fafafa;min-width:180px">
                   <div style="font-weight:700;font-size:14px;margin-bottom:6px;color:${props.nation_color}">${props.nation_name}</div>
                   <div style="color:#a1a1aa;margin-bottom:2px">Area: ${props.area_sq_km?.toFixed(1)} km²</div>
                   <div style="color:#a1a1aa;margin-bottom:2px">Claimed: Tick ${props.claimed_tick}</div>

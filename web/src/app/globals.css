@@ -32,7 +32,7 @@
 html, body { height: 100%; overflow: hidden; }
 
 body {
-  font-family: "Anonymous Pro", monospace;
+  font-family: "Montserrat", -apple-system, sans-serif;
   font-size: 15px;
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -110,7 +110,7 @@ button {
   border-radius: var(--radius);
   padding: 4px 10px;
   font-size: 0.7rem;
-  font-family: "Anonymous Pro", monospace;
+  font-family: "Montserrat", sans-serif;
 }
 
 .stat-badge .label {
@@ -281,7 +281,7 @@ button {
 .tick-label {
   font-size: 0.6rem;
   color: var(--text-muted);
-  font-family: "Anonymous Pro", monospace;
+  font-family: "Montserrat", sans-serif;
   margin-left: auto;
 }
 
@@ -430,7 +430,7 @@ button {
 
 .resource-chip {
   font-size: 0.6rem;
-  font-family: "Anonymous Pro", monospace;
+  font-family: "Montserrat", sans-serif;
   padding: 2px 6px;
   border-radius: var(--radius-sm);
 }
@@ -475,7 +475,7 @@ button {
 
 .event-data {
   font-size: 0.68rem;
-  font-family: "Anonymous Pro", monospace;
+  font-family: "Montserrat", sans-serif;
   color: var(--text-muted);
   margin-top: 6px;
   background: var(--bg-primary);
@@ -511,7 +511,7 @@ button {
   width: 20px;
   text-align: right;
   color: var(--text-muted);
-  font-family: "Anonymous Pro", monospace;
+  font-family: "Montserrat", sans-serif;
   font-size: 0.7rem;
 }
 
@@ -521,7 +521,7 @@ button {
 }
 
 .leaderboard-value {
-  font-family: "Anonymous Pro", monospace;
+  font-family: "Montserrat", sans-serif;
   color: var(--text-secondary);
   font-size: 0.72rem;
 }

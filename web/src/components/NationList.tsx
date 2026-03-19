@@ -328,7 +328,7 @@ function StatBox({ label, value, color }: { label: string; value: string; color:
       padding: "6px 8px",
     }}>
       <div style={{ fontSize: "0.5rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{label}</div>
-      <div style={{ fontSize: "0.85rem", fontWeight: 800, fontFamily: "'Anonymous Pro', monospace", color, marginTop: 1 }}>{value}</div>
+      <div style={{ fontSize: "0.85rem", fontWeight: 800, fontFamily: "'Montserrat', sans-serif", color, marginTop: 1 }}>{value}</div>
     </div>
   );
 }
@@ -339,7 +339,7 @@ function MetricBar({ label, value, color }: { label: string; value: number; colo
     <div style={{ background: "var(--bg-primary)", borderRadius: "var(--radius-sm)", padding: "6px 8px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
         <span style={{ fontSize: "0.5rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{label}</span>
-        <span style={{ fontSize: "0.6rem", fontFamily: "'Anonymous Pro', monospace", color }}>{pct.toFixed(1)}%</span>
+        <span style={{ fontSize: "0.6rem", fontFamily: "'Montserrat', sans-serif", color }}>{pct.toFixed(1)}%</span>
       </div>
       <div style={{ height: 4, background: "var(--bg-elevated)", borderRadius: 2, overflow: "hidden" }}>
         <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 2, transition: "width 0.3s" }} />

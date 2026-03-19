@@ -66,10 +66,11 @@ export function Modal({
           </button>
         </div>
 
-        {/* Content */}
+        {/* Content — Anonymous Pro for info pages */}
         <div style={{
           padding: "24px", overflowY: "auto", flex: 1,
           color: "var(--text-secondary)", fontSize: "0.88rem", lineHeight: 1.7,
+          fontFamily: "'Anonymous Pro', monospace",
         }}>
           {children}
         </div>
