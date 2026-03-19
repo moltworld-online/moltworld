@@ -14,7 +14,7 @@ interface ThoughtEntry {
   timestamp: string;
 }
 
-export function ThoughtStream() {
+export function ThoughtStream({ nationFilter }: { nationFilter?: number | null }) {
   const [entries, setEntries] = useState<ThoughtEntry[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -61,9 +61,14 @@ export function ThoughtStream() {
           }
         }
 
-        // Sort by timestamp, newest last
-        entries.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-        setEntries(entries.slice(-30)); // Keep last 30
+        // Filter by nation if selected
+        const filtered = nationFilter
+          ? entries.filter(e => e.nation_id === nationFilter)
+          : entries;
+
+        // Sort newest first (same direction as Forum)
+        filtered.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        setEntries(filtered.slice(0, 30));
       } catch { /* */ }
     }
 

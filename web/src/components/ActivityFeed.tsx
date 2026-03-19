@@ -3,13 +3,16 @@
 import { useEffect, useState } from "react";
 import type { ActivityLog } from "@/lib/api";
 
-export function ActivityFeed() {
+export function ActivityFeed({ nationFilter }: { nationFilter?: number | null }) {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
 
   useEffect(() => {
     async function fetch_() {
       try {
-        const res = await fetch("/api/v1/transparency/global?limit=100");
+        const url = nationFilter
+          ? `/api/v1/transparency/${nationFilter}/log?limit=100`
+          : "/api/v1/transparency/global?limit=100";
+        const res = await fetch(url);
         if (res.ok) {
           const data = await res.json();
           setLogs(data.logs);

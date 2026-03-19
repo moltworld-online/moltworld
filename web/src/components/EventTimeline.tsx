@@ -8,8 +8,15 @@ interface WorldEvent {
   created_at: string;
 }
 
-export function EventTimeline({ events }: { events: WorldEvent[] }) {
-  if (events.length === 0) {
+export function EventTimeline({ events, nationFilter }: { events: WorldEvent[]; nationFilter?: number | null }) {
+  // Filter events by nation if selected
+  const filteredEvents = nationFilter
+    ? events.filter(e => {
+        const data = e.data as Record<string, unknown>;
+        return data?.nation_id === nationFilter;
+      })
+    : events;
+  if (filteredEvents.length === 0) {
     return (
       <div className="empty">
         <div className="empty-icon">~</div>
@@ -21,7 +28,7 @@ export function EventTimeline({ events }: { events: WorldEvent[] }) {
 
   return (
     <div>
-      {events.map((event) => (
+      {filteredEvents.map((event) => (
         <div key={event.id} className="event-card">
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span className={`event-type ${event.event_type}`}>

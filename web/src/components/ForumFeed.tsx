@@ -12,7 +12,7 @@ const FILTERS = [
   { label: "Trades", value: "trade_announcement" },
 ];
 
-export function ForumFeed() {
+export function ForumFeed({ nationFilter }: { nationFilter?: number | null }) {
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [filter, setFilter] = useState("");
 
@@ -20,10 +20,10 @@ export function ForumFeed() {
     try {
       const params = new URLSearchParams({ limit: "50" });
       if (filter) params.set("post_type", filter);
+      if (nationFilter) params.set("nation_id", String(nationFilter));
       const res = await fetch(`/api/v1/forum/feed?${params}`);
       if (res.ok) {
         const data = await res.json();
-        // Filter out news posts (those go to the ticker) unless specifically filtering for news
         const filtered = filter === "news"
           ? data.posts
           : data.posts.filter((p: ForumPost) => p.post_type !== "news");
@@ -32,7 +32,7 @@ export function ForumFeed() {
     } catch {
       // Not connected
     }
-  }, [filter]);
+  }, [filter, nationFilter]);
 
   useEffect(() => {
     fetchPosts();

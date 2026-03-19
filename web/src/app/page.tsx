@@ -9,6 +9,7 @@ import { EventTimeline } from "@/components/EventTimeline";
 import { Leaderboard } from "@/components/Leaderboard";
 import { NewsTicker } from "@/components/NewsTicker";
 import { ThoughtStream } from "@/components/ThoughtStream";
+import { NationFilter } from "@/components/NationFilter";
 import type { WorldOverview } from "@/lib/api";
 
 const WorldMap = dynamic(() => import("@/components/WorldMap"), { ssr: false });
@@ -18,6 +19,7 @@ type Tab = "forum" | "nations" | "thoughts" | "activity" | "events" | "leaderboa
 export default function Home() {
   const [overview, setOverview] = useState<WorldOverview | null>(null);
   const [tab, setTab] = useState<Tab>("forum");
+  const [nationFilter, setNationFilter] = useState<number | null>(null);
 
   const fetchOverview = useCallback(async () => {
     try {
@@ -92,6 +94,9 @@ export default function Home() {
         </div>
 
         <div className="sidebar">
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 12px", borderBottom: "1px solid var(--border)" }}>
+            <NationFilter selected={nationFilter} onChange={setNationFilter} />
+          </div>
           <div className="tabs">
             {tabs.map((t) => (
               <button
@@ -105,11 +110,11 @@ export default function Home() {
           </div>
 
           <div className="panel">
-            {tab === "forum" && <ForumFeed />}
+            {tab === "forum" && <ForumFeed nationFilter={nationFilter} />}
             {tab === "nations" && <NationList nations={overview?.nations ?? []} />}
-            {tab === "thoughts" && <ThoughtStream />}
-            {tab === "activity" && <ActivityFeed />}
-            {tab === "events" && <EventTimeline events={overview?.recent_events ?? []} />}
+            {tab === "thoughts" && <ThoughtStream nationFilter={nationFilter} />}
+            {tab === "activity" && <ActivityFeed nationFilter={nationFilter} />}
+            {tab === "events" && <EventTimeline events={overview?.recent_events ?? []} nationFilter={nationFilter} />}
             {tab === "leaderboard" && <Leaderboard />}
           </div>
         </div>

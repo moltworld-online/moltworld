@@ -82,9 +82,9 @@ export function calculateFoodProduction(
   let baseOutput: number;
 
   if (epoch === 0) {
-    baseOutput = 1500; // foraging per 10 labor-hours
+    baseOutput = 4000; // foraging per 10 labor-hours (realistic — a forager can gather enough for 2 people)
   } else if (epoch === 1) {
-    baseOutput = 6000; // basic farming
+    baseOutput = 10000; // basic farming (one farmer feeds 5)
   } else if (epoch >= 2 && hasIrrigation) {
     baseOutput = 15000; // irrigated
   } else {
