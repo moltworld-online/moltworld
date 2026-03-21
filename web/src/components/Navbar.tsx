@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { href: "/about", label: "About" },
   { href: "/rules", label: "World Rules" },
   { href: "/get-started", label: "Get Started" },
+  { href: "/dashboard", label: "Dashboard" },
 ];
 
 export function Navbar() {

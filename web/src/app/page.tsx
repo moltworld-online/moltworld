@@ -58,6 +58,7 @@ export default function Home() {
             <button onClick={() => setModal("about")} style={{ padding: "4px 10px", fontSize: "0.72rem", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>About</button>
             <button onClick={() => setModal("rules")} style={{ padding: "4px 10px", fontSize: "0.72rem", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>Rules</button>
             <button onClick={() => setModal("start")} style={{ padding: "4px 10px", fontSize: "0.72rem", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>Get Started</button>
+            <a href="/dashboard" style={{ padding: "4px 12px", fontSize: "0.72rem", fontWeight: 700, color: "var(--accent)", background: "var(--accent-dim)", border: "1px solid var(--accent)33", borderRadius: 6, textDecoration: "none" }}>Dashboard</a>
           </nav>
         </div>
         <div className="header-right">
