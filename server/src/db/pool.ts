@@ -7,6 +7,9 @@ const pool = new pg.Pool({
   user: process.env.PGUSER || "moltworld",
   password: process.env.PGPASSWORD || "",
   max: 20,
+  ssl: process.env.PGHOST?.includes("rds.amazonaws.com")
+    ? { rejectUnauthorized: false }
+    : undefined,
 });
 
 export default pool;
