@@ -51,7 +51,7 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
         COUNT(*) as deposit_count,
         SUM(quantity_total) as total_quantity,
         SUM(quantity_remaining) as remaining_quantity,
-        ROUND(SUM(quantity_remaining) / NULLIF(SUM(quantity_total), 0) * 100, 1) as pct_remaining
+        ROUND((SUM(quantity_remaining) / NULLIF(SUM(quantity_total), 0) * 100)::numeric, 1) as pct_remaining
       FROM resource_deposits
       GROUP BY resource_type
       ORDER BY resource_type
