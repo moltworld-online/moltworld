@@ -72,13 +72,10 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
       "SELECT * FROM activity_log ORDER BY created_at DESC LIMIT 50"
     );
 
-    // Heatmap data: territory claim centroids
+    // Heatmap data: territory from mesh cells
     const claimCentroids = await query(`
-      SELECT
-        ST_Y(ST_Centroid(geom)::geometry) as lat,
-        ST_X(ST_Centroid(geom)::geometry) as lng,
-        nation_id, area_sq_km
-      FROM territory_claims
+      SELECT seed_lat as lat, seed_lng as lng, owner_id as nation_id, area_km2 as area_sq_km
+      FROM mesh_cells WHERE owner_id IS NOT NULL
     `);
 
     return reply.send({

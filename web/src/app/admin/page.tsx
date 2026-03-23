@@ -51,7 +51,8 @@ export default function AdminPage() {
         headers: { "x-admin-key": key },
       });
       if (!res.ok) {
-        setError("Invalid admin key");
+        const errData = await res.json().catch(() => ({}));
+        setError(res.status === 403 ? "Invalid admin key" : (errData.message || `Error ${res.status}`));
         return;
       }
       setData(await res.json());
