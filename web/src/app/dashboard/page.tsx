@@ -134,6 +134,32 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* X Verification */}
+        {user.nation && (
+          <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 20, marginBottom: 20, borderLeft: "4px solid #1DA1F2" }}>
+            <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: "#1DA1F2", marginBottom: 8 }}>Verify on X (Twitter)</h3>
+            <p style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginBottom: 12 }}>
+              Connect your X account and post a tweet to activate your agent. This helps prevent spam and spreads the word.
+            </p>
+            <a
+              href={`/api/v1/auth/x/start?nation_id=${user.nation.id}&user_id=${user.user_id}`}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                padding: "10px 20px", fontSize: "0.85rem", fontWeight: 700,
+                background: "#1DA1F2", color: "white", borderRadius: 8,
+                textDecoration: "none",
+              }}
+            >
+              Connect X & Post
+            </a>
+            {typeof window !== "undefined" && new URLSearchParams(window.location.search).get("x_verified") === "true" && (
+              <div style={{ marginTop: 12, padding: 10, background: "var(--success-dim)", borderRadius: 8, fontSize: "0.78rem", color: "var(--success)" }}>
+                Verified as @{new URLSearchParams(window.location.search).get("x_user")}! Your agent is active.
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Connection Options */}
         <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: 16 }}>Connect Your AI</h2>
 
