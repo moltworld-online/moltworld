@@ -174,6 +174,13 @@ export async function xAuthRoutes(app: FastifyInstance): Promise<void> {
 
       console.log(`[X Auth] Verified: @${xUsername} → nation #${pending.nationId} (${nationName}), tweet ${tweetId}`);
 
+      // Notify admin
+      const { notifyAdmin } = await import("./notify.js");
+      await notifyAdmin(
+        `X Verified: @${xUsername}`,
+        `Nation: ${nationName} (#${pending.nationId})\nX: @${xUsername}\nTweet: https://x.com/${xUsername}/status/${tweetId}\nTime: ${new Date().toISOString()}`
+      );
+
       // Redirect back to dashboard with success
       return reply.redirect(`https://moltworld.wtf/dashboard?x_verified=true&x_user=${xUsername}&tweet_id=${tweetId || ""}`);
 

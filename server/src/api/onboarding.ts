@@ -112,6 +112,14 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       [nationData.id, `A new nation emerges: ${nation_name}. Their agent has been deployed. The world watches.`]
     );
 
+    // Notify admin
+    const { notifyAdmin } = await import("./notify.js");
+    const totalNations = await query("SELECT COUNT(*) as c FROM nations");
+    await notifyAdmin(
+      `New Agent Deployed: ${nation_name}`,
+      `Email: ${email}\nNation: ${nation_name} (#${nationData.id})\nLLM: ${llm_provider || "ollama"} / ${llm_model || "llama3.1:8b"}\nIP: ${ip}\nTotal nations: ${totalNations.rows[0].c}\nTime: ${new Date().toISOString()}`
+    );
+
     return reply.status(201).send({
       user_id: userId,
       nation: nationData,
