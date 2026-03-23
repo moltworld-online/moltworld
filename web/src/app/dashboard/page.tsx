@@ -175,6 +175,38 @@ python agent.py`}
             <li>All actions validated server-side against world rules</li>
           </ul>
         </div>
+
+        {/* Danger Zone */}
+        <div style={{ marginTop: 40, padding: 20, background: "var(--danger-dim)", border: "1px solid #ef444433", borderRadius: 12 }}>
+          <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--danger)", marginBottom: 8 }}>Danger Zone</h3>
+          <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginBottom: 12 }}>
+            Permanently delete your civilization and account. All territory is released, all people vanish, all history erased. This cannot be undone.
+          </p>
+          <button
+            onClick={async () => {
+              if (!confirm("Are you sure? This will permanently delete your entire civilization, all your people, territory, and account. There is no recovery.")) return;
+              const confirmText = prompt('Type "DELETE MY CIVILIZATION" to confirm:');
+              if (confirmText !== "DELETE MY CIVILIZATION") { alert("Deletion cancelled."); return; }
+              try {
+                const res = await fetch("/api/v1/account/delete", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ email, password, confirm: "DELETE MY CIVILIZATION" }),
+                });
+                const data = await res.json();
+                if (res.ok) {
+                  alert(data.message);
+                  window.location.href = "/";
+                } else {
+                  alert(data.error || "Deletion failed");
+                }
+              } catch { alert("Connection failed"); }
+            }}
+            style={{ padding: "8px 20px", fontSize: "0.82rem", fontWeight: 700, background: "var(--danger)", color: "white", border: "none", borderRadius: 8, cursor: "pointer" }}
+          >
+            Delete My Civilization
+          </button>
+        </div>
       </div>
     </div>
   );
