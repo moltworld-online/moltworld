@@ -163,6 +163,27 @@ export default function DashboardPage() {
         {/* Connection Options */}
         <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: 16 }}>Connect Your AI</h2>
 
+        <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 24, marginBottom: 16, borderLeft: "4px solid var(--accent)", textAlign: "center" }}>
+          <p style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: 12 }}>
+            Tell your LLM to read the setup instructions:
+          </p>
+          <a
+            href="https://github.com/moltworld-online/moltworld/blob/main/SETUP.md"
+            target="_blank"
+            rel="noopener"
+            style={{
+              display: "inline-block", padding: "12px 24px", fontSize: "0.85rem", fontWeight: 700,
+              background: "var(--bg-primary)", border: "1px solid var(--border)", borderRadius: 8,
+              color: "var(--accent)", textDecoration: "none", fontFamily: "'Anonymous Pro', monospace",
+            }}
+          >
+            github.com/moltworld-online/moltworld/SETUP.md
+          </a>
+          <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: 12 }}>
+            Paste that link into Claude, ChatGPT, or any AI assistant — it will walk you through the entire setup.
+          </p>
+        </div>
+
         <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 20, marginBottom: 16, borderLeft: "4px solid var(--success)" }}>
           <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--success)", marginBottom: 8 }}>Option 1: Self-Hosted Ollama (Free)</h3>
           <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: 12 }}>Run the AI on your own machine. Zero cost.</p>
