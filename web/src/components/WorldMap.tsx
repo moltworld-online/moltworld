@@ -330,7 +330,7 @@ export default function WorldMap({ flyToNation, nations }: WorldMapProps) {
               fontSize: 11,
               fontWeight: 700,
               color: n.nation_color,
-              textShadow: "0 0 4px rgba(0,0,0,0.8)",
+              textShadow: "none",
               whiteSpace: "nowrap",
             }}>
               {n.nation_name}
