@@ -120,7 +120,7 @@ export async function secureAgentRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post("/api/v2/actions", async (request: AuthenticatedRequest, reply) => {
     const nationId = request.nationId!;
-    const body = request.body as { forum_post?: string; actions?: AgentAction[] };
+    const body = request.body as { forum_post?: string; actions?: AgentAction[]; reasoning?: string };
 
     // Get current tick
     const ws = await query("SELECT tick FROM world_state WHERE id = 1");
@@ -144,6 +144,25 @@ export async function secureAgentRoutes(app: FastifyInstance): Promise<void> {
         error: "TOO_MANY_ACTIONS",
         message: `Max 10 actions per tick. You submitted ${actions.length}.`,
       });
+    }
+
+    // Get nation info for events
+    const nationInfo = await query("SELECT name, color FROM nations WHERE id = $1", [nationId]);
+    const nationName = nationInfo.rows[0]?.name || `Nation #${nationId}`;
+    const nationColor = nationInfo.rows[0]?.color || "#888";
+
+    // Record agent reasoning (thought stream) if provided
+    if (body.reasoning && body.reasoning.length > 5) {
+      await query(
+        "INSERT INTO events (tick_number, event_type, data) VALUES ($1, 'agent_reasoning', $2)",
+        [tick, JSON.stringify({
+          nation_id: nationId,
+          nation_name: nationName,
+          nation_color: nationColor,
+          reasoning: body.reasoning.slice(0, 1500),
+          source: "external_agent",
+        })]
+      );
     }
 
     // Log the submission
@@ -214,6 +233,21 @@ export async function secureAgentRoutes(app: FastifyInstance): Promise<void> {
 
     // Mark this tick as processed for this agent
     lastActionTick.set(nationId, tick);
+
+    // Record agent_thoughts event (for ThoughtStream display)
+    const actionsTaken = results.filter(r => r.success).map(r => r.action);
+    const errors = results.filter(r => !r.success).map(r => `${r.action}: ${r.error}`);
+    await query(
+      "INSERT INTO events (tick_number, event_type, data) VALUES ($1, 'agent_thoughts', $2)",
+      [tick, JSON.stringify({
+        nation_id: nationId,
+        nation_name: nationName,
+        nation_color: nationColor,
+        thoughts: body.forum_post || "(no public statement)",
+        actions_taken: actionsTaken,
+        errors,
+      })]
+    );
 
     return reply.send({
       tick,
