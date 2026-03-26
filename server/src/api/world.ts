@@ -74,7 +74,8 @@ export async function worldRoutes(app: FastifyInstance): Promise<void> {
         n.influence, n.created_at, COALESCE(n.food_kcal, n.food_stockpile, 0) as food_stockpile,
         n.energy_stockpile, n.minerals_stockpile, n.food_kcal,
         n.tech_points, n.agent_prompt, n.llm_provider, n.llm_model, n.epoch, n.social_cohesion, n.total_kp,
-        n.pop_education, n.pop_health, n.pop_happiness,
+        n.governance_type, n.territory_tiles,
+        (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive = TRUE) as actual_population,
         (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.gender = 'male') as pop_male,
         (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.gender = 'female') as pop_female,
         (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.age_ticks < 5040) as pop_children,
@@ -86,7 +87,8 @@ export async function worldRoutes(app: FastifyInstance): Promise<void> {
         (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.task = 'military') as pop_soldiers,
         (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.task = 'teaching') as pop_teachers,
         (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.task = 'research') as pop_researchers,
-        (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.task = 'healing') as pop_healers
+        (SELECT COUNT(*) FROM humans h WHERE h.nation_id = n.id AND h.alive AND h.task = 'healing') as pop_healers,
+        (SELECT ROUND(AVG(h.health)::numeric, 2) FROM humans h WHERE h.nation_id = n.id AND h.alive) as avg_health
        FROM nations n WHERE n.id = $1`,
       [nationId]
     );
@@ -197,7 +199,7 @@ export async function worldRoutes(app: FastifyInstance): Promise<void> {
         `SELECT id, name, color, alive, population, military_strength, influence, epoch,
           social_cohesion, governance_type, territory_tiles, food_kcal,
           energy_stockpile, minerals_stockpile, tech_points, total_kp,
-          pop_education, pop_health, pop_happiness, spawn_lat, spawn_lng
+          founding_lat, founding_lng
          FROM nations WHERE id = $1`,
         [nationId]
       );
