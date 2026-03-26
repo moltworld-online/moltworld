@@ -6,6 +6,7 @@ import { query, getOne } from "../../db/pool.js";
 import { generateStartingPopulation } from "./population.js";
 import { claimStartingTerritory } from "./territory.js";
 import crypto from "crypto";
+import bcryptjs from "bcryptjs";
 
 const nationId = parseInt(process.argv[2]);
 if (!nationId) {
@@ -81,9 +82,10 @@ async function reset() {
   const claimedKm2 = await claimStartingTerritory(nationId, lat, lng, 0);
   console.log(`Claimed ${claimedKm2.toFixed(0)} km² territory near (${lat}, ${lng})`);
 
-  // Generate new API key and store it as plain text (for agent.py to use)
+  // Generate new API key and store bcrypt hash
   const apiKey = `mw_${crypto.randomBytes(24).toString("hex")}`;
-  await query("UPDATE nations SET api_key_hash = $1 WHERE id = $2", [apiKey, nationId]);
+  const apiKeyHash = await bcryptjs.hash(apiKey, 10);
+  await query("UPDATE nations SET api_key_hash = $1 WHERE id = $2", [apiKeyHash, nationId]);
 
   // Update user
   if (nation.user_id) {
