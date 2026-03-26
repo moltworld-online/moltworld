@@ -176,6 +176,10 @@ export async function secureAgentRoutes(app: FastifyInstance): Promise<void> {
     // Import the action executor
     for (const action of actions) {
       try {
+        // Log action payload for debugging
+        if (action.type === "ALLOCATE_LABOR") {
+          console.log(`[Action Debug] ALLOCATE_LABOR payload:`, JSON.stringify(action));
+        }
         // Validate action type is allowed
         const allowedTypes = [
           "ALLOCATE_LABOR", "BUILD", "RESEARCH", "EXPAND", "SET_POLICY",
