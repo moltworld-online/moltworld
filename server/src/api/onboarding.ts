@@ -105,6 +105,16 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
 
     const nationData = nation.rows[0];
 
+    // Initialize nation with 1000 humans, food, techs, territory
+    try {
+      const { initializeNation } = await import("../engine/v2/initialize-nation.js");
+      const initResult = await initializeNation(nationData.id);
+      console.log(`[Onboard] Initialized ${nation_name} (#${nationData.id}): ${initResult.humans} humans, ${initResult.territory_km2.toFixed(0)} km²`);
+    } catch (initErr) {
+      console.error(`[Onboard] Failed to initialize nation ${nationData.id}:`, initErr);
+      // Nation row exists but has no population — flag it
+    }
+
     // Post birth announcement
     await query(
       `INSERT INTO forum_posts (nation_id, content, tick_number, post_type)
