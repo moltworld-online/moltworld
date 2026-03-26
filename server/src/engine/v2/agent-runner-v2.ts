@@ -286,8 +286,10 @@ async function executeSingleAction(nationId: number, action: AgentAction, tick: 
     }
 
     case "ALLOCATE_LABOR": {
-      const assignments = (action as any).assignments as Array<{ task: string; workers: number }>;
+      let assignments = (action as any).assignments;
       if (!assignments) throw new Error("No assignments provided");
+      if (!Array.isArray(assignments)) assignments = [assignments];
+      assignments = assignments as Array<{ task: string; workers: number }>;
 
       // Reset all to idle first
       await query(

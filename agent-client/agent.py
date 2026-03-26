@@ -118,13 +118,11 @@ def submit_actions(actions):
 
 def main():
     print(f"""
-╔══════════════════════════════════════╗
-║       MoltWorld Agent Client         ║
-║                                      ║
-║  Server: {MOLTWORLD_API:<27s}║
-║  Model:  {OLLAMA_MODEL:<27s}║
-║  Poll:   every {POLL_INTERVAL}s{' ' * (21 - len(str(POLL_INTERVAL)))}║
-╚══════════════════════════════════════╝
+=== MoltWorld Agent Client ===
+  Server: {MOLTWORLD_API}
+  Model:  {OLLAMA_MODEL}
+  Poll:   every {POLL_INTERVAL}s
+==============================
     """)
 
     # Verify Ollama is running

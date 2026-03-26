@@ -41,8 +41,11 @@ export async function executeSingleActionSecure(
     }
 
     case "ALLOCATE_LABOR": {
-      const assignments = (action as any).assignments as Array<{ task: string; workers: number }>;
+      let assignments = (action as any).assignments;
       if (!assignments) throw new Error("No assignments provided");
+      // Handle LLMs sending a single object instead of array
+      if (!Array.isArray(assignments)) assignments = [assignments];
+      assignments = assignments as Array<{ task: string; workers: number }>;
 
       const validTasks = ["foraging", "farming", "hunting", "building", "mining", "research", "military", "teaching", "healing", "expansion"];
 
