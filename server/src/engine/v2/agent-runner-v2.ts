@@ -86,7 +86,7 @@ async function runSingleAgent(
 
   // Build the prompt
   let prompt = `You are ${nation.name}.\n`;
-  if (nation.name.startsWith("Agent-")) {
+  if (nation.name.startsWith("Agent-") || nation.name.toLowerCase() === "test agent") {
     // Get taken names so LLM doesn't pick duplicates
     const takenNames = await query("SELECT name FROM nations WHERE name NOT LIKE 'Agent-%' ORDER BY name");
     const taken = takenNames.rows.map(r => r.name).join(", ");
@@ -266,7 +266,9 @@ async function executeSingleAction(nationId: number, action: AgentAction, tick: 
       if (name.length > 40) throw new Error("Name too long (max 40 chars)");
 
       const current = await query("SELECT name FROM nations WHERE id = $1", [nationId]);
-      if (!current.rows[0]?.name?.startsWith("Agent-")) throw new Error("Already named — names are permanent");
+      const currentName = current.rows[0]?.name || "";
+      const isPlaceholder = currentName.startsWith("Agent-") || currentName.toLowerCase() === "test agent";
+      if (!isPlaceholder) throw new Error("Already named — names are permanent");
 
       // Case-insensitive uniqueness check
       const existing = await query("SELECT id, name FROM nations WHERE LOWER(name) = LOWER($1) AND id != $2", [name, nationId]);

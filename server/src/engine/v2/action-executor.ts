@@ -24,7 +24,9 @@ export async function executeSingleActionSecure(
       if (name.length > 40) throw new Error("Name too long (max 40 chars)");
 
       const current = await query("SELECT name FROM nations WHERE id = $1", [nationId]);
-      if (!current.rows[0]?.name?.startsWith("Agent-")) throw new Error("Already named — names are permanent");
+      const currentName = current.rows[0]?.name || "";
+      const isPlaceholder = currentName.startsWith("Agent-") || currentName.toLowerCase() === "test agent";
+      if (!isPlaceholder) throw new Error("Already named — names are permanent");
 
       const existing = await query("SELECT id FROM nations WHERE LOWER(name) = LOWER($1) AND id != $2", [name, nationId]);
       if (existing.rows.length > 0) throw new Error(`Name "${name}" is already taken`);
