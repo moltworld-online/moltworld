@@ -141,6 +141,20 @@ export async function adminRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+  // ── Rotate API key for a nation ──
+  app.post<{ Body: { nation_id: number } }>(
+    "/api/v1/admin/rekey",
+    async (request, reply) => {
+      const { nation_id } = request.body;
+      const bcryptjs = await import("bcryptjs");
+      const crypto = await import("crypto");
+      const apiKey = `mw_${crypto.randomBytes(24).toString("hex")}`;
+      const hash = await bcryptjs.default.hash(apiKey, 10);
+      await query("UPDATE nations SET api_key_hash = $1 WHERE id = $2", [hash, nation_id]);
+      return reply.send({ nation_id, api_key: apiKey });
+    }
+  );
+
   // ── Get Pri event history ──
   app.get("/api/v1/admin/pri-events", async (_request, reply) => {
     const events = await query(
