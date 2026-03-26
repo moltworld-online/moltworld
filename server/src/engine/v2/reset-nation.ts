@@ -16,8 +16,8 @@ if (!nationId) {
 async function reset() {
   console.log(`Resetting nation #${nationId}...`);
 
-  const nation = await getOne<{ id: number; name: string; user_id: number; spawn_lat: number; spawn_lng: number }>(
-    "SELECT id, name, user_id, spawn_lat, spawn_lng FROM nations WHERE id = $1",
+  const nation = await getOne<{ id: number; name: string; user_id: number; founding_lat: number; founding_lng: number }>(
+    "SELECT id, name, user_id, founding_lat, founding_lng FROM nations WHERE id = $1",
     [nationId]
   );
   if (!nation) {
@@ -33,24 +33,23 @@ async function reset() {
   await query("UPDATE mesh_cells SET owner_id = NULL WHERE owner_id = $1", [nationId]);
   console.log("Cleared old data");
 
-  // Pick spawn if not set
-  let lat = nation.spawn_lat;
-  let lng = nation.spawn_lng;
+  // Pick spawn location if not set
+  let lat = nation.founding_lat;
+  let lng = nation.founding_lng;
   if (!lat || !lng) {
     const cell = await getOne<{ seed_lat: number; seed_lng: number }>(
-      "SELECT seed_lat, seed_lng FROM mesh_cells WHERE owner_id IS NULL AND is_land = TRUE ORDER BY RANDOM() LIMIT 1"
+      "SELECT seed_lat, seed_lng FROM mesh_cells WHERE owner_id IS NULL AND cell_type = 'land' ORDER BY RANDOM() LIMIT 1"
     );
     if (!cell) throw new Error("No unclaimed land cells");
     lat = cell.seed_lat;
     lng = cell.seed_lng;
-    await query("UPDATE nations SET spawn_lat = $1, spawn_lng = $2, founding_lat = $1, founding_lng = $2 WHERE id = $3", [lat, lng, nationId]);
+    await query("UPDATE nations SET founding_lat = $1, founding_lng = $2 WHERE id = $3", [lat, lng, nationId]);
   }
 
-  // Reset nation stats
+  // Reset nation stats (only columns that exist in production schema)
   await query(
     `UPDATE nations SET
       alive = TRUE, population = 1000, food_kcal = 720000000,
-      wood = 500, stone = 200,
       epoch = 0, total_kp = 0, social_cohesion = 50,
       governance_type = 'band', territory_tiles = 0, military_strength = 0
     WHERE id = $1`,
@@ -82,12 +81,14 @@ async function reset() {
   const claimedKm2 = await claimStartingTerritory(nationId, lat, lng, 0);
   console.log(`Claimed ${claimedKm2.toFixed(0)} km² territory near (${lat}, ${lng})`);
 
-  // Generate new API key
+  // Generate new API key and store it as plain text (for agent.py to use)
   const apiKey = `mw_${crypto.randomBytes(24).toString("hex")}`;
-  await query("UPDATE nations SET api_key = $1 WHERE id = $2", [apiKey, nationId]);
+  await query("UPDATE nations SET api_key_hash = $1 WHERE id = $2", [apiKey, nationId]);
 
   // Update user
-  await query("UPDATE users SET agent_deployed = TRUE WHERE id = $1", [nation.user_id]);
+  if (nation.user_id) {
+    await query("UPDATE users SET agent_deployed = TRUE WHERE id = $1", [nation.user_id]);
+  }
 
   console.log(`\nNation #${nationId} (${nation.name}) is ready!`);
   console.log(`Population: 1000 | Food: 720M kcal | Epoch: 0`);
