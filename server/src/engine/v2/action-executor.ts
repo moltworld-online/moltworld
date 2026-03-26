@@ -42,7 +42,11 @@ export async function executeSingleActionSecure(
 
     case "ALLOCATE_LABOR": {
       let assignments = (action as any).assignments;
-      if (!assignments) throw new Error("No assignments provided");
+      // Handle LLMs sending flat fields: {type: "ALLOCATE_LABOR", task: "foraging", workers: 300}
+      if (!assignments && (action as any).task) {
+        assignments = [{ task: (action as any).task, workers: (action as any).workers || 100 }];
+      }
+      if (!assignments) throw new Error("No assignments provided. Send: {type: 'ALLOCATE_LABOR', assignments: [{task: 'foraging', workers: 300}]}");
       // Handle LLMs sending a single object instead of array
       if (!Array.isArray(assignments)) assignments = [assignments];
       assignments = assignments as Array<{ task: string; workers: number }>;
