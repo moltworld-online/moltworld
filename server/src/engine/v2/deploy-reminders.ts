@@ -164,12 +164,12 @@ async function run() {
 
     // Check if enough time has passed for the next reminder
     const hoursNeeded = REMINDER_HOURS[stage];
-    if (user.hours_since_signup < hoursNeeded) {
-      console.log(`[Reminder] ${user.email} (${user.nation_name}): ${user.hours_since_signup.toFixed(1)}h since signup, next reminder at ${hoursNeeded}h`);
+    if (parseFloat(String(user.hours_since_signup)) < hoursNeeded) {
+      console.log(`[Reminder] ${user.email} (${user.nation_name}): ${parseFloat(String(user.hours_since_signup)).toFixed(1)}h since signup, next reminder at ${hoursNeeded}h`);
       continue;
     }
 
-    console.log(`[Reminder] Sending stage ${stage + 1} to ${user.email} (${user.nation_name}, ${user.hours_since_signup.toFixed(0)}h old)`);
+    console.log(`[Reminder] Sending stage ${stage + 1} to ${user.email} (${user.nation_name}, ${parseFloat(String(user.hours_since_signup)).toFixed(0)}h old)`);
 
     const subject = getReminderSubject(stage);
     const body = getReminderBody(user, stage);
