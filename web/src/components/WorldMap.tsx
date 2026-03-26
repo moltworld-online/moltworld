@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { MapContainer, TileLayer, GeoJSON, Rectangle, Tooltip, CircleMarker } from "react-leaflet";
+import { useEffect, useState, useRef, useCallback } from "react";
+import { MapContainer, TileLayer, GeoJSON, Rectangle, Tooltip, CircleMarker, Marker, useMap } from "react-leaflet";
 import type { FeatureCollection, Feature, Geometry } from "geojson";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -42,10 +42,12 @@ const CLIMATE_BANDS = [
 
 interface TerritoryProps {
   claim_id: number;
+  cell_id: number;
   nation_id: number;
   nation_name: string;
   nation_color: string;
   area_sq_km: number;
+  area_km2: number;
   claimed_tick: number;
   improvements: Array<{ type: string; level: number }>;
 }
@@ -53,10 +55,64 @@ interface TerritoryProps {
 // All possible resource type filters
 const RESOURCE_TYPES = ["water", "fertile", "timber", "iron", "copper", "coal", "oil", "gold", "lithium", "fish"];
 
-export default function WorldMap() {
+// Helper to compute nation centroids from territory features
+function computeNationCentroids(features: Feature[]): Array<{ nation_id: number; nation_name: string; nation_color: string; lat: number; lng: number; total_area: number }> {
+  const nationMap = new Map<number, { name: string; color: string; lats: number[]; lngs: number[]; area: number }>();
+
+  for (const f of features) {
+    const p = f.properties as TerritoryProps;
+    if (!p) continue;
+    let entry = nationMap.get(p.nation_id);
+    if (!entry) {
+      entry = { name: p.nation_name, color: p.nation_color, lats: [], lngs: [], area: 0 };
+      nationMap.set(p.nation_id, entry);
+    }
+    entry.area += (p.area_sq_km || p.area_km2 || 0);
+
+    // Get centroid from first coordinate ring
+    const coords = (f.geometry as any)?.coordinates?.[0];
+    if (coords && coords.length > 0) {
+      let avgLat = 0, avgLng = 0;
+      for (const c of coords) {
+        avgLng += c[0];
+        avgLat += c[1];
+      }
+      entry.lats.push(avgLat / coords.length);
+      entry.lngs.push(avgLng / coords.length);
+    }
+  }
+
+  return Array.from(nationMap.entries()).map(([id, d]) => ({
+    nation_id: id,
+    nation_name: d.name,
+    nation_color: d.color,
+    lat: d.lats.reduce((a, b) => a + b, 0) / d.lats.length,
+    lng: d.lngs.reduce((a, b) => a + b, 0) / d.lngs.length,
+    total_area: d.area,
+  }));
+}
+
+// Component to fly to a location
+function FlyTo({ target }: { target: { lat: number; lng: number; zoom: number } | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (target) {
+      map.flyTo([target.lat, target.lng], target.zoom, { duration: 1.5 });
+    }
+  }, [target, map]);
+  return null;
+}
+
+interface WorldMapProps {
+  flyToNation?: number | null;
+  nations?: Array<{ id: number; name: string; color: string }>;
+}
+
+export default function WorldMap({ flyToNation, nations }: WorldMapProps) {
   const [territories, setTerritories] = useState<FeatureCollection | null>(null);
   const [landData, setLandData] = useState<FeatureCollection | null>(null);
   const [geoKey, setGeoKey] = useState(0);
+  const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
   const [layers, setLayers] = useState<Record<string, boolean>>({
     resources: true,
     tectonic: false,
@@ -64,7 +120,6 @@ export default function WorldMap() {
     territories: true,
     landOutline: true,
   });
-  // Individual resource type toggles
   const [resourceFilters, setResourceFilters] = useState<Record<string, boolean>>(
     Object.fromEntries(RESOURCE_TYPES.map((t) => [t, true]))
   );
@@ -72,10 +127,22 @@ export default function WorldMap() {
   const toggleLayer = (key: string) => setLayers((p) => ({ ...p, [key]: !p[key] }));
   const toggleResource = (key: string) => setResourceFilters((p) => ({ ...p, [key]: !p[key] }));
 
+  // Compute nation centroids for markers
+  const nationCentroids = territories?.features ? computeNationCentroids(territories.features) : [];
+
+  // Handle flyToNation prop
+  useEffect(() => {
+    if (flyToNation && nationCentroids.length > 0) {
+      const nation = nationCentroids.find(n => n.nation_id === flyToNation);
+      if (nation) {
+        setFlyTarget({ lat: nation.lat, lng: nation.lng, zoom: 7 });
+      }
+    }
+  }, [flyToNation, nationCentroids.length]);
+
   useEffect(() => {
     async function fetchTerritories() {
       try {
-        // Try v2 mesh-based territories first, fall back to v1
         let res = await fetch("/api/v2/territories");
         if (!res.ok) res = await fetch("/api/v1/world/territories");
         if (res.ok) {
@@ -89,7 +156,6 @@ export default function WorldMap() {
     return () => clearInterval(interval);
   }, []);
 
-  // Load land outline once
   useEffect(() => {
     fetch("/land.geojson")
       .then((r) => r.json())
@@ -97,32 +163,9 @@ export default function WorldMap() {
       .catch(() => {});
   }, []);
 
-  // Fetch live resource grid from API (falls back to static data if API not available)
-  const [liveResources, setLiveResources] = useState<Array<{
-    lat: number; lng: number; dominant: string; totalQuantity: number;
-    resources: Array<{ type: string; count: number; total: number }>;
-  }> | null>(null);
-
-  useEffect(() => {
-    async function fetchResources() {
-      try {
-        const res = await fetch("/api/v1/layers/resource-grid");
-        if (res.ok) {
-          const data = await res.json();
-          setLiveResources(data.cells);
-        }
-      } catch { /* fall back to static */ }
-    }
-    fetchResources();
-    const interval = setInterval(fetchResources, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Use live data if available, else fall back to static regions
+  // Use static resource regions (always available)
   const visibleResources = layers.resources
-    ? (liveResources
-        ? liveResources.filter((r) => resourceFilters[r.dominant])
-        : RESOURCE_REGIONS.filter((r) => resourceFilters[r.type]))
+    ? RESOURCE_REGIONS.filter((r) => resourceFilters[r.type])
     : [];
 
   return (
@@ -135,12 +178,14 @@ export default function WorldMap() {
       maxZoom={19}
       attributionControl={false}
     >
+      <FlyTo target={flyTarget} />
+
       <TileLayer
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         maxZoom={19}
       />
 
-      {/* Land outlines — subtle coastline borders so agents/viewers can see land vs water */}
+      {/* Land outlines */}
       {layers.landOutline && landData && (
         <GeoJSON
           data={landData}
@@ -165,72 +210,36 @@ export default function WorldMap() {
         </Rectangle>
       ))}
 
-      {/* Resource cells — rendered from live DB data or static fallback */}
-      {visibleResources.map((r: any, i: number) => {
-        // Handle both live API data and static RESOURCE_REGIONS format
-        const isLive = "dominant" in r;
-        const resType = isLive ? r.dominant : r.type;
-        const color = RESOURCE_COLORS[resType] || "#888";
-        const centerLat = isLive ? r.lat + 1 : (r.bounds[0] + r.bounds[2]) / 2;
-        const centerLng = isLive ? r.lng + 1 : (r.bounds[1] + r.bounds[3]) / 2;
-
-        // Size based on quantity
-        const qty = isLive ? Math.log10(Math.max(1, r.totalQuantity)) : r.quantity;
-        const radius = isLive ? Math.max(4, Math.min(12, qty * 1.2)) : Math.max(5, Math.min(20, qty * 2));
-        const opacity = isLive ? Math.min(0.35, 0.08 + qty * 0.03) : quantityOpacity(r.quantity);
-
-        // For live data, render as a 2° rectangle for better coverage
-        if (isLive) {
-          return (
-            <Rectangle
-              key={`res-${i}`}
-              bounds={[[r.lat, r.lng], [r.lat + 2, r.lng + 2]]}
-              pathOptions={{
-                color: "transparent",
-                fillColor: color,
-                fillOpacity: opacity,
-              }}
-              eventHandlers={{
-                mouseover: (e) => e.target.setStyle({ fillOpacity: opacity + 0.15 }),
-                mouseout: (e) => e.target.setStyle({ fillOpacity: opacity }),
-              }}
-            >
-              <Tooltip>
-                <div style={{ fontFamily: "Montserrat, sans-serif", fontSize: 11, lineHeight: 1.5, minWidth: 160 }}>
-                  <div style={{ fontWeight: 700, color, fontSize: 12 }}>{RESOURCE_LABELS[resType] || resType}</div>
-                  {r.resources?.slice(0, 4).map((sub: any, j: number) => (
-                    <div key={j} style={{ color: "#a1a1aa", fontSize: 10 }}>
-                      <span style={{ color: RESOURCE_COLORS[sub.type] || "#888" }}>{RESOURCE_LABELS[sub.type] || sub.type}</span>
-                      : {sub.count} deposits ({Math.floor(sub.total).toLocaleString()})
-                    </div>
-                  ))}
-                  <div style={{ color: "#71717a", fontSize: 9, marginTop: 3 }}>
-                    {centerLat.toFixed(1)}°N, {centerLng.toFixed(1)}°E
-                  </div>
-                </div>
-              </Tooltip>
-            </Rectangle>
-          );
-        }
-
+      {/* Resource Regions — rendered as transparent-bordered rectangles */}
+      {visibleResources.map((r, i) => {
+        const color = RESOURCE_COLORS[r.type] || "#888";
+        const opacity = 0.12 + (r.quantity / 10) * 0.25; // Range: 0.12 to 0.37
         return (
-          <CircleMarker
+          <Rectangle
             key={`res-${i}`}
-            center={[centerLat, centerLng]}
-            radius={radius}
-            pathOptions={{ color: "transparent", fillColor: color, fillOpacity: opacity }}
+            bounds={[[r.bounds[0], r.bounds[1]], [r.bounds[2], r.bounds[3]]]}
+            pathOptions={{
+              color: color,
+              weight: 0.5,
+              opacity: 0.3,
+              fillColor: color,
+              fillOpacity: opacity,
+            }}
             eventHandlers={{
-              mouseover: (e) => e.target.setStyle({ fillOpacity: opacity + 0.2 }),
-              mouseout: (e) => e.target.setStyle({ fillOpacity: opacity }),
+              mouseover: (e) => e.target.setStyle({ fillOpacity: opacity + 0.15, weight: 1.5 }),
+              mouseout: (e) => e.target.setStyle({ fillOpacity: opacity, weight: 0.5 }),
             }}
           >
             <Tooltip>
               <div style={{ fontFamily: "Montserrat, sans-serif", fontSize: 11, lineHeight: 1.5, minWidth: 140 }}>
-                <div style={{ fontWeight: 700, color, fontSize: 12 }}>{RESOURCE_LABELS[resType] || resType}</div>
-                <div style={{ color: "#71717a", fontSize: 10 }}>{centerLat.toFixed(1)}°N, {centerLng.toFixed(1)}°E</div>
+                <div style={{ fontWeight: 700, color, fontSize: 12 }}>{RESOURCE_LABELS[r.type] || r.type}</div>
+                <div style={{ color: "#a1a1aa", fontSize: 10 }}>Abundance: {r.quantity}/10</div>
+                <div style={{ color: "#71717a", fontSize: 9, marginTop: 3 }}>
+                  {((r.bounds[0] + r.bounds[2]) / 2).toFixed(1)}°, {((r.bounds[1] + r.bounds[3]) / 2).toFixed(1)}°
+                </div>
               </div>
             </Tooltip>
-          </CircleMarker>
+          </Rectangle>
         );
       })}
 
@@ -268,9 +277,9 @@ export default function WorldMap() {
             return {
               color,
               weight: 2.5,
-              opacity: 0.85,
+              opacity: 0.9,
               fillColor: color,
-              fillOpacity: 0.2,
+              fillOpacity: 0.35,
               lineJoin: "round" as const,
               lineCap: "round" as const,
             };
@@ -278,9 +287,10 @@ export default function WorldMap() {
           onEachFeature={(feature, layer) => {
             const props = feature.properties as TerritoryProps;
             layer.on({
-              mouseover: (e: L.LeafletMouseEvent) => (e.target as L.Path).setStyle({ fillOpacity: 0.5, weight: 3 }),
-              mouseout: (e: L.LeafletMouseEvent) => (e.target as L.Path).setStyle({ fillOpacity: 0.25, weight: 2 }),
+              mouseover: (e: L.LeafletMouseEvent) => (e.target as L.Path).setStyle({ fillOpacity: 0.6, weight: 3.5 }),
+              mouseout: (e: L.LeafletMouseEvent) => (e.target as L.Path).setStyle({ fillOpacity: 0.35, weight: 2.5 }),
             });
+            const area = props.area_sq_km || props.area_km2 || 0;
             const imps = props.improvements?.length
               ? props.improvements.map((imp) => `${imp.type} (L${imp.level})`).join(", ")
               : "None";
@@ -288,7 +298,7 @@ export default function WorldMap() {
               L.popup({ className: "mw-popup" }).setContent(`
                 <div style="font-family:Montserrat,sans-serif;font-size:12px;color:#fafafa;min-width:180px">
                   <div style="font-weight:700;font-size:14px;margin-bottom:6px;color:${props.nation_color}">${props.nation_name}</div>
-                  <div style="color:#a1a1aa;margin-bottom:2px">Area: ${props.area_sq_km?.toFixed(1)} km²</div>
+                  <div style="color:#a1a1aa;margin-bottom:2px">Area: ${area.toFixed(1)} km²</div>
                   <div style="color:#a1a1aa;margin-bottom:2px">Claimed: Tick ${props.claimed_tick}</div>
                   <div style="color:#a1a1aa">Improvements: ${imps}</div>
                 </div>
@@ -297,6 +307,40 @@ export default function WorldMap() {
           }}
         />
       )}
+
+      {/* Nation markers — always visible, even when zoomed out */}
+      {layers.territories && nationCentroids.map((n) => (
+        <CircleMarker
+          key={`nation-marker-${n.nation_id}`}
+          center={[n.lat, n.lng]}
+          radius={10}
+          pathOptions={{
+            color: "#fafafa",
+            weight: 2,
+            fillColor: n.nation_color,
+            fillOpacity: 0.9,
+          }}
+          eventHandlers={{
+            click: () => setFlyTarget({ lat: n.lat, lng: n.lng, zoom: 7 }),
+          }}
+        >
+          <Tooltip permanent direction="top" offset={[0, -12]}>
+            <div style={{
+              fontFamily: "Montserrat, sans-serif",
+              fontSize: 11,
+              fontWeight: 700,
+              color: n.nation_color,
+              textShadow: "0 0 4px rgba(0,0,0,0.8)",
+              whiteSpace: "nowrap",
+            }}>
+              {n.nation_name}
+              <span style={{ fontWeight: 400, color: "#a1a1aa", marginLeft: 6, fontSize: 9 }}>
+                {n.total_area.toFixed(0)} km²
+              </span>
+            </div>
+          </Tooltip>
+        </CircleMarker>
+      ))}
 
       {/* Controls */}
       <LayerPanel layers={layers} toggleLayer={toggleLayer} resourceFilters={resourceFilters} toggleResource={toggleResource} showResourceFilters={layers.resources} />

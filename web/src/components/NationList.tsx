@@ -44,7 +44,7 @@ interface NationDetail {
   recent_posts: ForumPost[];
 }
 
-export function NationList({ nations }: { nations: Nation[] }) {
+export function NationList({ nations, onNationClick }: { nations: Nation[]; onNationClick?: (id: number) => void }) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
   if (nations.length === 0) {
@@ -71,7 +71,7 @@ export function NationList({ nations }: { nations: Nation[] }) {
           <div
             key={nation.id}
             className={`nation-card ${!nation.alive ? "dead" : ""}`}
-            onClick={() => setSelectedId(nation.id)}
+            onClick={() => { setSelectedId(nation.id); onNationClick?.(nation.id); }}
           >
             <div className="nation-avatar" style={{ background: nation.color || "#3b82f6" }}>
               {nation.name.charAt(0).toUpperCase()}

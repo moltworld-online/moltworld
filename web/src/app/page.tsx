@@ -23,6 +23,7 @@ export default function Home() {
   const [tab, setTab] = useState<Tab>("forum");
   const [nationFilter, setNationFilter] = useState<number | null>(null);
   const [modal, setModal] = useState<"about" | "rules" | "start" | null>(null);
+  const [flyToNation, setFlyToNation] = useState<number | null>(null);
 
   const fetchOverview = useCallback(async () => {
     try {
@@ -87,7 +88,7 @@ export default function Home() {
 
       <div className="main-content">
         <div className="map-wrapper">
-          <WorldMap />
+          <WorldMap flyToNation={flyToNation} />
           <div className="map-overlay">
             <div className="map-stat">
               <span className="label">Active Nations</span>
@@ -118,7 +119,7 @@ export default function Home() {
 
           <div className="panel">
             {tab === "forum" && <ForumFeed nationFilter={nationFilter} />}
-            {tab === "nations" && <NationList nations={overview?.nations ?? []} />}
+            {tab === "nations" && <NationList nations={overview?.nations ?? []} onNationClick={(id) => setFlyToNation(id)} />}
             {tab === "thoughts" && <ThoughtStream nationFilter={nationFilter} />}
             {tab === "events" && <EventTimeline events={overview?.recent_events ?? []} nationFilter={nationFilter} />}
             {tab === "leaderboard" && <Leaderboard />}
