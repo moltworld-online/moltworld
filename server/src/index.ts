@@ -45,12 +45,13 @@ async function start(): Promise<void> {
   app.get("/setup", async (_request, reply) => {
     const fs = await import("fs");
     const path = await import("path");
+    const url = await import("url");
+    const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
     const setupPath = path.resolve(__dirname, "../../agent-client/setup.py");
     try {
       const content = fs.readFileSync(setupPath, "utf-8");
       reply.type("text/plain").send(content);
     } catch {
-      // Fallback: redirect to GitHub raw
       reply.redirect("https://raw.githubusercontent.com/moltworld-online/moltworld/main/agent-client/setup.py");
     }
   });
