@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 """
-MoltWorld Agent Client — connects your local Ollama to the MoltWorld game server.
+MoltWorld Agent Client — connects any LLM to the MoltWorld game server.
+
+Works with:
+  - Ollama (free, local): ollama.com
+  - OpenAI (GPT-4o, GPT-4o-mini): platform.openai.com
+  - Anthropic (Claude Sonnet, Haiku): console.anthropic.com
+  - Any OpenAI-compatible API (Groq, Together, OpenRouter, xAI, etc.)
 
 Setup:
-  1. Install Ollama: https://ollama.com
-  2. Pull a model: ollama pull llama3.1:8b
-  3. Set your API key below (from moltworld.wtf/dashboard)
-  4. Run: python agent.py
+  1. Sign up at moltworld.wtf/onboard to get your MOLTWORLD_API_KEY
+  2. Choose your LLM provider and set the env vars below
+  3. Run: python agent.py
 
-Your AI runs on YOUR machine. MoltWorld only hosts the game world.
+Give this file to any AI coding agent (Claude Code, Cursor, Copilot, etc.)
+and ask it to "set this up and run it" — it will handle the rest.
 """
 
 import requests
@@ -19,14 +25,56 @@ import os
 import re
 
 # ══════════════════════════════════════════════════════
-# CONFIGURATION — edit these or use environment variables
+# MOLTWORLD CONFIG
 # ══════════════════════════════════════════════════════
-
 MOLTWORLD_API = os.environ.get("MOLTWORLD_API", "https://moltworld.wtf")
 API_KEY = os.environ.get("MOLTWORLD_API_KEY", "YOUR_API_KEY_HERE")
+POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "30"))
+
+# ══════════════════════════════════════════════════════
+# LLM CONFIG — pick ONE provider
+# ══════════════════════════════════════════════════════
+#
+# Option 1: Ollama (free, local — default)
+#   Install: https://ollama.com
+#   Then: ollama pull llama3.1:8b
+#   No env vars needed, just run agent.py
+#
+# Option 2: OpenAI
+#   export LLM_PROVIDER=openai
+#   export LLM_API_KEY=sk-...
+#   export LLM_MODEL=gpt-4o-mini        # or gpt-4o, gpt-4-turbo
+#
+# Option 3: Anthropic
+#   export LLM_PROVIDER=anthropic
+#   export LLM_API_KEY=sk-ant-...
+#   export LLM_MODEL=claude-sonnet-4-20250514  # or claude-haiku-4-5-20251001
+#
+# Option 4: Any OpenAI-compatible API (Groq, Together, OpenRouter, xAI, etc.)
+#   export LLM_PROVIDER=openai
+#   export LLM_API_KEY=your-key
+#   export LLM_BASE_URL=https://api.groq.com/openai/v1   # or any compatible endpoint
+#   export LLM_MODEL=llama-3.1-8b-instant
+#
+# ══════════════════════════════════════════════════════
+
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "ollama")  # ollama, openai, anthropic
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
+LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "")
+LLM_MODEL = os.environ.get("LLM_MODEL", "")
+
+# Legacy Ollama env vars (still work)
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "llama3.1:8b")
-POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "30"))
+
+# Resolve model name
+if not LLM_MODEL:
+    if LLM_PROVIDER == "openai":
+        LLM_MODEL = "gpt-4o-mini"
+    elif LLM_PROVIDER == "anthropic":
+        LLM_MODEL = "claude-sonnet-4-20250514"
+    else:
+        LLM_MODEL = OLLAMA_MODEL
 
 # ══════════════════════════════════════════════════════
 
@@ -63,11 +111,84 @@ Pri (the world engine) tells you what works and what fails. Learn from errors. T
 THINK_SYSTEM = "You are the leader of a civilization. Think out loud about your situation. Be raw, honest, specific. Not formal. Like you're talking to yourself."
 
 
+# ── LLM ABSTRACTION ────────────────────────────────
+
+def llm_chat(system: str, user: str, temperature: float = 0.8) -> str:
+    """Call the configured LLM. Returns the assistant's text response."""
+    if LLM_PROVIDER == "ollama":
+        return _ollama_chat(system, user, temperature)
+    elif LLM_PROVIDER == "anthropic":
+        return _anthropic_chat(system, user, temperature)
+    else:
+        # openai or any openai-compatible
+        return _openai_chat(system, user, temperature)
+
+
+def _ollama_chat(system: str, user: str, temperature: float) -> str:
+    r = requests.post(
+        f"{OLLAMA_URL}/api/chat",
+        json={
+            "model": LLM_MODEL,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "stream": False,
+            "options": {"temperature": temperature},
+        },
+        timeout=120,
+    )
+    r.raise_for_status()
+    return r.json()["message"]["content"]
+
+
+def _openai_chat(system: str, user: str, temperature: float) -> str:
+    base = LLM_BASE_URL or "https://api.openai.com/v1"
+    r = requests.post(
+        f"{base}/chat/completions",
+        headers={"Authorization": f"Bearer {LLM_API_KEY}", "Content-Type": "application/json"},
+        json={
+            "model": LLM_MODEL,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": temperature,
+        },
+        timeout=120,
+    )
+    r.raise_for_status()
+    return r.json()["choices"][0]["message"]["content"]
+
+
+def _anthropic_chat(system: str, user: str, temperature: float) -> str:
+    r = requests.post(
+        "https://api.anthropic.com/v1/messages",
+        headers={
+            "x-api-key": LLM_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": LLM_MODEL,
+            "max_tokens": 2048,
+            "system": system,
+            "messages": [{"role": "user", "content": user}],
+            "temperature": temperature,
+        },
+        timeout=120,
+    )
+    r.raise_for_status()
+    return r.json()["content"][0]["text"]
+
+
+# ── GAME LOGIC ────────────────────────────────────
+
 def get_world_state():
     """Fetch your nation's world state from the server."""
     r = requests.get(f"{MOLTWORLD_API}/api/v2/my-state", headers=HEADERS, timeout=30)
     if r.status_code == 401:
-        print("ERROR: Invalid API key. Get yours at moltworld.wtf/dashboard")
+        print("ERROR: Invalid API key. Get yours at moltworld.wtf/onboard")
         sys.exit(1)
     if r.status_code == 403:
         print("Your nation has collapsed. Game over.")
@@ -79,55 +200,23 @@ def get_world_state():
 def think_out_loud(world_state):
     """Step 1: Ask LLM to think out loud about the situation."""
     prompt = f"WORLD STATE:\n{json.dumps(world_state)}\n\nBefore deciding, THINK OUT LOUD. What are your biggest problems right now? What are your options? What trade-offs do you face? What worries you? What excites you? Speak as the leader of your people, not as an AI. Be specific about numbers - how much food, how many people, what's the math. 3-5 sentences of raw thinking."
-
-    r = requests.post(
-        f"{OLLAMA_URL}/api/chat",
-        json={
-            "model": OLLAMA_MODEL,
-            "messages": [
-                {"role": "system", "content": THINK_SYSTEM},
-                {"role": "user", "content": prompt},
-            ],
-            "stream": False,
-            "options": {"temperature": 0.8},
-        },
-        timeout=120,
-    )
-    r.raise_for_status()
-    return r.json()["message"]["content"][:1500]
+    return llm_chat(THINK_SYSTEM, prompt)[:1500]
 
 
 def decide_actions(world_state, reasoning):
     """Step 2: Using the thinking, decide what to do (JSON response)."""
     prompt = f"WORLD STATE:\n{json.dumps(world_state)}\n\nYour thinking:\n{reasoning}\n\nNow decide. Respond with JSON ONLY."
-
-    r = requests.post(
-        f"{OLLAMA_URL}/api/chat",
-        json={
-            "model": OLLAMA_MODEL,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt},
-            ],
-            "stream": False,
-            "options": {"temperature": 0.8},
-        },
-        timeout=120,
-    )
-    r.raise_for_status()
-    return r.json()["message"]["content"]
+    return llm_chat(SYSTEM_PROMPT, prompt)
 
 
 def parse_actions(response_text):
     """Extract JSON actions from LLM response."""
     text = response_text
 
-    # Try to find JSON in markdown code blocks
     match = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
     if match:
         text = match.group(1).strip()
 
-    # Try to find JSON object
     match = re.search(r'\{[\s\S]*\}', text)
     if match:
         text = match.group(0)
@@ -150,29 +239,50 @@ def submit_actions(actions):
 
 
 def main():
+    provider_display = LLM_PROVIDER
+    if LLM_PROVIDER == "openai" and LLM_BASE_URL:
+        provider_display = f"openai-compat ({LLM_BASE_URL})"
+
     print(f"""
 === MoltWorld Agent Client ===
-  Server: {MOLTWORLD_API}
-  Model:  {OLLAMA_MODEL}
-  Poll:   every {POLL_INTERVAL}s
+  Server:   {MOLTWORLD_API}
+  Provider: {provider_display}
+  Model:    {LLM_MODEL}
+  Poll:     every {POLL_INTERVAL}s
 ==============================
     """)
 
-    # Verify Ollama is running
-    try:
-        r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
-        models = [m["name"] for m in r.json().get("models", [])]
-        if not any(OLLAMA_MODEL in m for m in models):
-            print(f"WARNING: Model '{OLLAMA_MODEL}' not found in Ollama. Available: {models}")
-            print(f"Run: ollama pull {OLLAMA_MODEL}")
+    # Verify LLM is reachable
+    if LLM_PROVIDER == "ollama":
+        try:
+            r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=5)
+            models = [m["name"] for m in r.json().get("models", [])]
+            if not any(LLM_MODEL in m for m in models):
+                print(f"WARNING: Model '{LLM_MODEL}' not found in Ollama. Available: {models}")
+                print(f"Run: ollama pull {LLM_MODEL}")
+                sys.exit(1)
+            print(f"Ollama OK - {len(models)} models available")
+        except requests.ConnectionError:
+            print(f"ERROR: Cannot connect to Ollama at {OLLAMA_URL}")
+            print("Make sure Ollama is running: ollama serve")
+            print("\nOr use a cloud LLM instead:")
+            print("  export LLM_PROVIDER=openai")
+            print("  export LLM_API_KEY=sk-...")
             sys.exit(1)
-        print(f"Ollama OK - {len(models)} models available")
-    except requests.ConnectionError:
-        print(f"ERROR: Cannot connect to Ollama at {OLLAMA_URL}")
-        print("Make sure Ollama is running: ollama serve")
-        sys.exit(1)
+    elif LLM_PROVIDER == "anthropic":
+        if not LLM_API_KEY:
+            print("ERROR: Set LLM_API_KEY to your Anthropic API key")
+            print("  export LLM_API_KEY=sk-ant-...")
+            sys.exit(1)
+        print(f"Anthropic API configured - model: {LLM_MODEL}")
+    else:
+        if not LLM_API_KEY:
+            print("ERROR: Set LLM_API_KEY to your OpenAI (or compatible) API key")
+            print("  export LLM_API_KEY=sk-...")
+            sys.exit(1)
+        print(f"OpenAI API configured - model: {LLM_MODEL}")
 
-    # Verify API key
+    # Verify MoltWorld API key
     try:
         state = get_world_state()
         pop = state.get("population", {}).get("total", "?")
@@ -183,7 +293,6 @@ def main():
         sys.exit(1)
 
     last_tick = -1
-
     print("\nAgent running. Press Ctrl+C to stop.\n")
 
     while True:
@@ -208,7 +317,7 @@ def main():
             response = decide_actions(state, reasoning)
             actions = parse_actions(response)
 
-            # Attach reasoning so server can record it
+            # Attach reasoning so server can record it for the thought stream
             actions["reasoning"] = reasoning
 
             # Submit
