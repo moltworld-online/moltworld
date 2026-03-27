@@ -110,8 +110,10 @@ interface WorldMapProps {
 
 export default function WorldMap({ flyToNation, nations }: WorldMapProps) {
   const [territories, setTerritories] = useState<FeatureCollection | null>(null);
+  const [resourceCells, setResourceCells] = useState<FeatureCollection | null>(null);
   const [landData, setLandData] = useState<FeatureCollection | null>(null);
   const [geoKey, setGeoKey] = useState(0);
+  const [resGeoKey, setResGeoKey] = useState(100);
   const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
   const [layers, setLayers] = useState<Record<string, boolean>>({
     resources: true,
@@ -156,6 +158,20 @@ export default function WorldMap({ flyToNation, nations }: WorldMapProps) {
     return () => clearInterval(interval);
   }, []);
 
+  // Fetch resource cells (Voronoi mesh with resources)
+  useEffect(() => {
+    async function fetchResources() {
+      try {
+        const res = await fetch("/api/v2/resources");
+        if (res.ok) {
+          setResourceCells(await res.json());
+          setResGeoKey((k) => k + 1);
+        }
+      } catch { /* not available yet */ }
+    }
+    fetchResources();
+  }, []);
+
   useEffect(() => {
     fetch("/land.geojson")
       .then((r) => r.json())
@@ -163,7 +179,8 @@ export default function WorldMap({ flyToNation, nations }: WorldMapProps) {
       .catch(() => {});
   }, []);
 
-  // Use static resource regions (always available)
+  // Fallback to static rectangles if Voronoi resources not loaded
+  const useVoronoiResources = resourceCells && resourceCells.features?.length > 0;
   const visibleResources = layers.resources
     ? RESOURCE_REGIONS.filter((r) => resourceFilters[r.type])
     : [];
@@ -210,33 +227,65 @@ export default function WorldMap({ flyToNation, nations }: WorldMapProps) {
         </Rectangle>
       ))}
 
-      {/* Resource Regions — rendered as transparent-bordered rectangles */}
-      {visibleResources.map((r, i) => {
+      {/* Resource cells — Voronoi mesh polygons colored by dominant resource */}
+      {layers.resources && useVoronoiResources && (
+        <GeoJSON
+          key={resGeoKey}
+          data={{
+            type: "FeatureCollection",
+            features: resourceCells!.features.filter((f: any) =>
+              resourceFilters[f.properties?.dominant_type]
+            ),
+          } as FeatureCollection}
+          style={(feature) => {
+            const props = feature?.properties;
+            const resType = props?.dominant_type || "unknown";
+            const qty = props?.dominant_quantity || 0;
+            const color = RESOURCE_COLORS[resType] || "#888";
+            const opacity = 0.1 + (qty / 10) * 0.25;
+            return {
+              color: color,
+              weight: 0.3,
+              opacity: 0.2,
+              fillColor: color,
+              fillOpacity: opacity,
+            };
+          }}
+          onEachFeature={(feature, layer) => {
+            const props = feature.properties;
+            const resources = props?.resources || [];
+            layer.on({
+              mouseover: (e: L.LeafletMouseEvent) => (e.target as L.Path).setStyle({ fillOpacity: 0.5, weight: 1 }),
+              mouseout: (e: L.LeafletMouseEvent) => {
+                const qty = props?.dominant_quantity || 0;
+                (e.target as L.Path).setStyle({ fillOpacity: 0.1 + (qty / 10) * 0.25, weight: 0.3 });
+              },
+            });
+            const tooltipHtml = resources.map((r: any) =>
+              `<span style="color:${RESOURCE_COLORS[r.type] || '#888'}">${RESOURCE_LABELS[r.type] || r.type}</span>: ${r.quantity}/10`
+            ).join("<br/>");
+            layer.bindTooltip(
+              `<div style="font-family:Montserrat,sans-serif;font-size:11px;line-height:1.6">${tooltipHtml}</div>`,
+              { sticky: true }
+            );
+          }}
+        />
+      )}
+
+      {/* Fallback: static resource rectangles if Voronoi not loaded */}
+      {layers.resources && !useVoronoiResources && visibleResources.map((r, i) => {
         const color = RESOURCE_COLORS[r.type] || "#888";
-        const opacity = 0.12 + (r.quantity / 10) * 0.25; // Range: 0.12 to 0.37
+        const opacity = 0.12 + (r.quantity / 10) * 0.25;
         return (
           <Rectangle
             key={`res-${i}`}
             bounds={[[r.bounds[0], r.bounds[1]], [r.bounds[2], r.bounds[3]]]}
-            pathOptions={{
-              color: color,
-              weight: 0.5,
-              opacity: 0.3,
-              fillColor: color,
-              fillOpacity: opacity,
-            }}
-            eventHandlers={{
-              mouseover: (e) => e.target.setStyle({ fillOpacity: opacity + 0.15, weight: 1.5 }),
-              mouseout: (e) => e.target.setStyle({ fillOpacity: opacity, weight: 0.5 }),
-            }}
+            pathOptions={{ color, weight: 0.5, opacity: 0.3, fillColor: color, fillOpacity: opacity }}
           >
             <Tooltip>
-              <div style={{ fontFamily: "Montserrat, sans-serif", fontSize: 11, lineHeight: 1.5, minWidth: 140 }}>
+              <div style={{ fontFamily: "Montserrat, sans-serif", fontSize: 11 }}>
                 <div style={{ fontWeight: 700, color, fontSize: 12 }}>{RESOURCE_LABELS[r.type] || r.type}</div>
                 <div style={{ color: "#a1a1aa", fontSize: 10 }}>Abundance: {r.quantity}/10</div>
-                <div style={{ color: "#71717a", fontSize: 9, marginTop: 3 }}>
-                  {((r.bounds[0] + r.bounds[2]) / 2).toFixed(1)}°, {((r.bounds[1] + r.bounds[3]) / 2).toFixed(1)}°
-                </div>
               </div>
             </Tooltip>
           </Rectangle>

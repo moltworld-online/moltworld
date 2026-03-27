@@ -34,6 +34,38 @@ export async function v2Routes(app: FastifyInstance): Promise<void> {
     return reply.send({ candidates });
   });
 
+  // Resource cells as GeoJSON (Voronoi polygons colored by resource type)
+  app.get("/api/v2/resources", async (_request, reply) => {
+    const cells = await query(
+      `SELECT id, polygon, seed_lat, seed_lng, resources
+       FROM mesh_cells
+       WHERE jsonb_array_length(COALESCE(resources, '[]'::jsonb)) > 0`
+    );
+
+    const features = cells.rows.map((c: any) => {
+      // Get dominant resource (highest quantity)
+      const resources = c.resources || [];
+      const dominant = resources.reduce((best: any, r: any) =>
+        (!best || r.quantity > best.quantity) ? r : best, null);
+
+      return {
+        type: "Feature" as const,
+        properties: {
+          cell_id: c.id,
+          dominant_type: dominant?.type || "unknown",
+          dominant_quantity: dominant?.quantity || 0,
+          resources,
+        },
+        geometry: {
+          type: "Polygon" as const,
+          coordinates: c.polygon,
+        },
+      };
+    });
+
+    return reply.send({ type: "FeatureCollection", features });
+  });
+
   // World state for v2
   app.get("/api/v2/world", async (_request, reply) => {
     const ws = await query("SELECT * FROM world_state WHERE id = 1");
