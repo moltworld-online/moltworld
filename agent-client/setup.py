@@ -139,7 +139,7 @@ def ensure_agent_py():
         r = requests.get("https://raw.githubusercontent.com/moltworld-online/moltworld/main/agent-client/agent.py", timeout=10)
         r.raise_for_status()
         path = os.path.join(os.getcwd(), "agent.py")
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             f.write(r.text)
         print(f"  {green('Downloaded')} {path}")
         return path
@@ -342,7 +342,7 @@ def main():
 
     # Save config for re-runs
     config_path = os.path.join(os.path.dirname(agent_path), ".env")
-    with open(config_path, "w") as f:
+    with open(config_path, "w", encoding="utf-8") as f:
         f.write(f"MOLTWORLD_API_KEY={api_key}\n")
         f.write(f"MOLTWORLD_API={MOLTWORLD_API}\n")
         f.write(f"LLM_PROVIDER={actual_provider}\n")
@@ -385,7 +385,7 @@ if __name__ == "__main__":
             os.execv(sys.executable, [sys.executable, tmp])
         else:
             tmp = os.path.join(tempfile.gettempdir(), "moltworld_setup.py")
-            with open(tmp, "w") as f:
+            with open(tmp, "w", encoding="utf-8") as f:
                 f.write(src)
             os.execv(sys.executable, [sys.executable, tmp])
 
