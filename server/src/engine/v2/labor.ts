@@ -263,6 +263,55 @@ export async function calculateCropFarmingYield(
 }
 
 /**
+ * Calculate domesticated herd yield — meat, milk, eggs per tick.
+ * Also returns plow bonus (1.5x farming if nation has plow animals).
+ * Herds grow ~2% per cycle (30 ticks) if fed.
+ */
+export async function processHerds(
+  client: pg.PoolClient,
+  nationId: number,
+  tick: number,
+): Promise<{ kcal: number; plowBonus: number; herdGrowth: Array<{ species: string; grew: number }> }> {
+  const herds = await client.query(
+    "SELECT species_id, herd_size FROM national_herds WHERE nation_id = $1 AND herd_size > 0",
+    [nationId]
+  );
+
+  if (herds.rows.length === 0) return { kcal: 0, plowBonus: 1.0, herdGrowth: [] };
+
+  let totalKcal = 0;
+  let hasPlow = false;
+  const growth: Array<{ species: string; grew: number }> = [];
+
+  for (const herd of herds.rows) {
+    const def = ANIMAL_SPECIES.find(a => a.id === herd.species_id);
+    if (!def) continue;
+
+    // Meat/milk/egg production per tick
+    totalKcal += def.meat_kcal_per_tick * herd.herd_size;
+
+    // Plow animals boost farming
+    if (def.provides.includes("plow")) hasPlow = true;
+
+    // Herd growth: ~2% per 30 ticks (1 cycle), minimum 1
+    if (tick % 30 === 0 && herd.herd_size < 500) {
+      const grew = Math.max(1, Math.floor(herd.herd_size * 0.02));
+      await client.query(
+        "UPDATE national_herds SET herd_size = herd_size + $1 WHERE nation_id = $2 AND species_id = $3",
+        [grew, nationId, herd.species_id]
+      );
+      growth.push({ species: def.name, grew });
+    }
+  }
+
+  return {
+    kcal: totalKcal,
+    plowBonus: hasPlow ? 1.5 : 1.0,
+    herdGrowth: growth,
+  };
+}
+
+/**
  * Get the primary climate zone for a nation's territory.
  */
 export async function getNationClimateZone(

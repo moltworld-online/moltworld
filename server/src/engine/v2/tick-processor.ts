@@ -157,9 +157,16 @@ async function processNationTick(
     farmingHours, nation.epoch, skills.farming, hasIrrigation, seasonMod, hasFireTech,
   );
 
+  // Domesticated herd yield + plow bonus + herd growth
+  const { processHerds } = await import("./labor.js");
+  const herdResult = await processHerds(client, nationId, tick);
+
+  // Apply plow bonus to farming output
+  const plowedFarmingKcal = (cropFarmingKcal + fallbackFarmingKcal) * herdResult.plowBonus;
+
   // Total food produced
   const fireBonus = hasFireTech ? 1.3 : 1.0;
-  const foodProduced = (foragingKcal + huntingKcal) * fireBonus + cropFarmingKcal + fallbackFarmingKcal;
+  const foodProduced = (foragingKcal + huntingKcal) * fireBonus + plowedFarmingKcal + herdResult.kcal;
 
   // Update food stockpile
   await client.query(

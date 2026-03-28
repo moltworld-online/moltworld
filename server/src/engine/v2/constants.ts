@@ -152,6 +152,12 @@ export const EARLY_TECHS = [
   { id: "fruit_cultivation",    kpCost: 60,  prereqs: ["plant_cultivation"], effect: "Farm bananas, dates, figs, breadfruit, olives, almonds, coconuts" },
   { id: "legume_cultivation",   kpCost: 45,  prereqs: ["plant_cultivation"], effect: "Farm lentils, chickpeas, soybeans" },
   { id: "fiber_cultivation",    kpCost: 55,  prereqs: ["plant_cultivation"], effect: "Farm cotton, flax, hemp" },
+  // Animal families (require animal_domestication + species in territory)
+  { id: "livestock_herding",   kpCost: 80,  prereqs: ["animal_domestication"], effect: "Domesticate cattle, sheep, goats, yak, reindeer. Meat, milk, wool, plow." },
+  { id: "pig_keeping",         kpCost: 50,  prereqs: ["animal_domestication"], effect: "Domesticate pigs. Efficient meat production." },
+  { id: "poultry_keeping",     kpCost: 40,  prereqs: ["animal_domestication"], effect: "Domesticate chickens, turkeys. Eggs and meat." },
+  { id: "horse_taming",        kpCost: 120, prereqs: ["animal_domestication"], effect: "Domesticate horses, donkeys. Transport, plow, cavalry." },
+  { id: "camelid_taming",      kpCost: 100, prereqs: ["animal_domestication"], effect: "Domesticate camels, llamas, alpacas. Transport, wool." },
 ] as const;
 
 // ── Construction ──

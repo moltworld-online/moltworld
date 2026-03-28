@@ -229,6 +229,63 @@ export async function executeSingleActionSecure(
       break;
     }
 
+    case "DOMESTICATE_ANIMAL": {
+      const speciesId = ((action as any).species_id || "").trim();
+      if (!speciesId) throw new Error("species_id required");
+
+      const { ANIMAL_SPECIES } = await import("./species-data.js");
+      const { getDiscoveredTechs } = await import("./knowledge.js");
+
+      const species = ANIMAL_SPECIES.find(a => a.id === speciesId);
+      if (!species) throw new Error(`Unknown animal: ${speciesId}`);
+      if (!species.domesticable) throw new Error(`${species.name} cannot be domesticated`);
+
+      // Check tech prerequisites
+      const techs = await getDiscoveredTechs(
+        { query: (text: string, values?: unknown[]) => query(text, values) } as any,
+        nationId
+      );
+      if (!techs.includes("animal_domestication")) {
+        throw new Error("Requires animal_domestication tech");
+      }
+      if (species.family !== "none" && !techs.includes(species.family)) {
+        throw new Error(`Requires ${species.family} tech to domesticate ${species.name}`);
+      }
+
+      // Check species exists in territory
+      const hasWild = await query(
+        `SELECT COUNT(*) as c FROM mesh_cells
+         WHERE owner_id = $1 AND wild_species @> $2::jsonb`,
+        [nationId, JSON.stringify([{ id: speciesId }])]
+      );
+      if (parseInt(hasWild.rows[0].c) === 0) {
+        throw new Error(`No wild ${species.name} in your territory. Expand to a region where they live, or trade for breeding pairs.`);
+      }
+
+      // Check not already domesticated
+      const existing = await query(
+        "SELECT herd_size FROM national_herds WHERE nation_id = $1 AND species_id = $2",
+        [nationId, speciesId]
+      );
+      if (existing.rows.length > 0) {
+        throw new Error(`${species.name} already domesticated (herd size: ${existing.rows[0].herd_size})`);
+      }
+
+      // Create initial herd (small starting population)
+      await query(
+        `INSERT INTO national_herds (nation_id, species_id, herd_size, domesticated_tick)
+         VALUES ($1, $2, 10, $3)`,
+        [nationId, speciesId, tick]
+      );
+
+      const providesStr = species.provides.join(", ");
+      await query(
+        "INSERT INTO forum_posts (nation_id, content, tick_number, post_type) VALUES ($1, $2, $3, 'news')",
+        [nationId, `${species.name} domesticated! Initial herd of 10. Provides: ${providesStr}.`, tick]
+      );
+      break;
+    }
+
     case "FORUM_POST": {
       const content = ((action as any).content || "").trim();
       if (content.length > 5) {

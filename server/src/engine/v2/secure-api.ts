@@ -202,7 +202,7 @@ export async function secureAgentRoutes(app: FastifyInstance): Promise<void> {
         // Validate action type is allowed
         const allowedTypes = [
           "ALLOCATE_LABOR", "BUILD", "RESEARCH", "EXPAND", "SET_POLICY",
-          "DIPLOMACY", "MILITARY", "RENAME", "FORUM_POST", "PLANT_CROP",
+          "DIPLOMACY", "MILITARY", "RENAME", "FORUM_POST", "PLANT_CROP", "DOMESTICATE_ANIMAL",
         ];
         if (!allowedTypes.includes(action.type)) {
           results.push({
@@ -317,7 +317,7 @@ export async function secureAgentRoutes(app: FastifyInstance): Promise<void> {
       format: "Respond with JSON: {\"forum_post\": \"...\", \"actions\": [...]}",
       available_actions: [
         "ALLOCATE_LABOR", "BUILD", "RESEARCH", "EXPAND",
-        "SET_POLICY", "DIPLOMACY", "MILITARY", "RENAME", "FORUM_POST", "PLANT_CROP",
+        "SET_POLICY", "DIPLOMACY", "MILITARY", "RENAME", "FORUM_POST", "PLANT_CROP", "DOMESTICATE_ANIMAL",
       ],
     });
   });

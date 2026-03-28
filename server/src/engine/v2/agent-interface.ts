@@ -30,7 +30,8 @@ export type AgentAction =
   | { type: "MILITARY"; action: string; params: Record<string, unknown> }
   | { type: "RENAME"; name: string }
   | { type: "FORUM_POST"; content: string }
-  | { type: "PLANT_CROP"; species_id: string; tiles: number };
+  | { type: "PLANT_CROP"; species_id: string; tiles: number }
+  | { type: "DOMESTICATE_ANIMAL"; species_id: string };
 
 export interface LaborAssignment {
   task: string;
@@ -84,6 +85,8 @@ export interface WorldStateReport {
     };
     cultivated_crops: Array<{ id: string; name: string; tiles: number; climate_match: string }>;
     available_crop_families: string[];
+    domesticated_herds: Array<{ id: string; name: string; herd_size: number; provides: string[] }>;
+    available_animal_families: string[];
   };
   knowledge: {
     total_kp: number;
@@ -238,6 +241,24 @@ export async function buildWorldStateReport(
   }
   const availableCropFamilies = Array.from(cropFamilies);
 
+  // Domesticated herds
+  const herdsResult = await client.query(
+    "SELECT species_id, herd_size FROM national_herds WHERE nation_id = $1 AND herd_size > 0",
+    [nationId]
+  ).catch(() => ({ rows: [] }));
+  const domesticatedHerds = herdsResult.rows.map((h: any) => {
+    const def = ANIMAL_SPECIES.find(a => a.id === h.species_id);
+    return { id: h.species_id, name: def?.name || h.species_id, herd_size: h.herd_size, provides: def?.provides || [] };
+  });
+
+  // Which animal families could this nation domesticate?
+  const animalFamilies = new Set<string>();
+  for (const sp of territorySpecies.animals) {
+    const def = ANIMAL_SPECIES.find(a => a.id === sp.id);
+    if (def && def.domesticable && def.family !== "none") animalFamilies.add(def.family);
+  }
+  const availableAnimalFamilies = Array.from(animalFamilies);
+
   // Recent validation errors
   const errors = await client.query(
     `SELECT data FROM events WHERE event_type = 'agent_action_failed' AND data->>'nation_id' = $1::text ORDER BY created_at DESC LIMIT 5`,
@@ -296,6 +317,8 @@ export async function buildWorldStateReport(
       },
       cultivated_crops: cultivatedCrops,
       available_crop_families: availableCropFamilies,
+      domesticated_herds: domesticatedHerds,
+      available_animal_families: availableAnimalFamilies,
     },
     knowledge: {
       total_kp: n.total_kp || 0,
