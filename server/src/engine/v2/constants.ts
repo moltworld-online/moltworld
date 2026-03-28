@@ -146,6 +146,12 @@ export const EARLY_TECHS = [
   { id: "counting",             kpCost: 100, prereqs: ["language"],          effect: "Resource tracking, pop management" },
   { id: "plant_cultivation",    kpCost: 200, prereqs: ["foraging_knowledge"],effect: "Unlocks agriculture (Epoch 1)" },
   { id: "animal_domestication", kpCost: 300, prereqs: ["basic_hunting"],     effect: "Livestock, pack animals" },
+  // Crop families (require plant_cultivation + species in territory)
+  { id: "grain_cultivation",    kpCost: 50,  prereqs: ["plant_cultivation"], effect: "Farm wheat, barley, rice, maize, millet, sorghum, oats, rye, teff" },
+  { id: "root_cultivation",     kpCost: 40,  prereqs: ["plant_cultivation"], effect: "Farm potatoes, yams, taro, cassava, squash, gourds" },
+  { id: "fruit_cultivation",    kpCost: 60,  prereqs: ["plant_cultivation"], effect: "Farm bananas, dates, figs, breadfruit, olives, almonds, coconuts" },
+  { id: "legume_cultivation",   kpCost: 45,  prereqs: ["plant_cultivation"], effect: "Farm lentils, chickpeas, soybeans" },
+  { id: "fiber_cultivation",    kpCost: 55,  prereqs: ["plant_cultivation"], effect: "Farm cotton, flax, hemp" },
 ] as const;
 
 // ── Construction ──

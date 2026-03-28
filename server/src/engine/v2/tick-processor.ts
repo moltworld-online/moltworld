@@ -139,15 +139,27 @@ async function processNationTick(
     huntingHours, territorySpecies.animals, skills.hunting || 0, hasBasicHunting,
   );
 
-  // Farming (still uses flat formula for now — Stage 3 will make it crop-specific)
+  // Crop-aware farming (uses cultivated crops + climate match)
+  const { calculateCropFarmingYield } = await import("./labor.js");
+  const hasIrrigation = !!(await client.query(
+    "SELECT id FROM structures WHERE nation_id = $1 AND structure_type = 'irrigation' AND completed = TRUE LIMIT 1",
+    [nationId]
+  )).rows[0];
+
+  const cropFarmingKcal = await calculateCropFarmingYield(
+    client, nationId, farmingHours, skills.farming,
+    season, climateZone, hasIrrigation, hasFireTech,
+  );
+
+  // Fallback: if no crops planted, farmers forage instead (less efficient)
   const seasonMod = getSeasonFoodModifier(season, climateZone);
-  const farmingKcal = farmingHours > 0 ? calculateFoodProduction(
-    farmingHours, nation.epoch, skills.farming, false, seasonMod, hasFireTech,
-  ) : 0;
+  const fallbackFarmingKcal = cropFarmingKcal > 0 ? 0 : calculateFoodProduction(
+    farmingHours, nation.epoch, skills.farming, hasIrrigation, seasonMod, hasFireTech,
+  );
 
   // Total food produced
   const fireBonus = hasFireTech ? 1.3 : 1.0;
-  const foodProduced = (foragingKcal + huntingKcal) * fireBonus + farmingKcal;
+  const foodProduced = (foragingKcal + huntingKcal) * fireBonus + cropFarmingKcal + fallbackFarmingKcal;
 
   // Update food stockpile
   await client.query(

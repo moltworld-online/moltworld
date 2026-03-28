@@ -157,6 +157,78 @@ export async function executeSingleActionSecure(
       break;
     }
 
+    case "PLANT_CROP": {
+      const speciesId = ((action as any).species_id || "").trim();
+      const tiles = Math.max(0, Math.floor((action as any).tiles || 1));
+      if (!speciesId) throw new Error("species_id required");
+
+      const { PLANT_SPECIES, getClimateZone } = await import("./species-data.js");
+      const { getDiscoveredTechs } = await import("./knowledge.js");
+
+      // Validate species exists
+      const species = PLANT_SPECIES.find(p => p.id === speciesId);
+      if (!species) throw new Error(`Unknown species: ${speciesId}. Available: ${PLANT_SPECIES.map(p => p.id).join(", ")}`);
+
+      // Check tech prerequisites
+      const techs = await getDiscoveredTechs(
+        { query: (text: string, values?: unknown[]) => query(text, values) } as any,
+        nationId
+      );
+      if (!techs.includes("plant_cultivation")) {
+        throw new Error("Requires plant_cultivation tech");
+      }
+      if (!techs.includes(species.family)) {
+        throw new Error(`Requires ${species.family} tech to farm ${species.name}`);
+      }
+
+      // Check species exists in territory (wild or already cultivating)
+      const hasWild = await query(
+        `SELECT COUNT(*) as c FROM mesh_cells
+         WHERE owner_id = $1 AND wild_species @> $2::jsonb`,
+        [nationId, JSON.stringify([{ id: speciesId }])]
+      );
+      const alreadyCultivating = await query(
+        "SELECT id FROM national_crops WHERE nation_id = $1 AND species_id = $2",
+        [nationId, speciesId]
+      );
+      if (parseInt(hasWild.rows[0].c) === 0 && alreadyCultivating.rows.length === 0) {
+        throw new Error(`No wild ${species.name} in your territory. Expand to a region where it grows, or trade for seeds.`);
+      }
+
+      // Check climate match
+      const nationCells = await query(
+        "SELECT climate_zone, COUNT(*) as c FROM mesh_cells WHERE owner_id = $1 GROUP BY climate_zone ORDER BY c DESC LIMIT 1",
+        [nationId]
+      );
+      const climateZone = nationCells.rows[0]?.climate_zone || "temperate";
+      const climateMatch = species.climate_zones.includes(climateZone);
+      if (!climateMatch) {
+        // Check if irrigation exists for adjacent-zone tolerance
+        const hasIrrigation = await query(
+          "SELECT id FROM structures WHERE nation_id = $1 AND structure_type = 'irrigation' AND completed = TRUE",
+          [nationId]
+        );
+        if (hasIrrigation.rows.length === 0) {
+          throw new Error(`${species.name} needs ${species.climate_zones.join(" or ")} climate. Your territory is ${climateZone}. Build irrigation to extend viable zones.`);
+        }
+      }
+
+      // Upsert into national_crops
+      await query(
+        `INSERT INTO national_crops (nation_id, species_id, tiles_planted, first_planted_tick)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (nation_id, species_id)
+         DO UPDATE SET tiles_planted = national_crops.tiles_planted + $3`,
+        [nationId, speciesId, tiles, tick]
+      );
+
+      await query(
+        "INSERT INTO forum_posts (nation_id, content, tick_number, post_type) VALUES ($1, $2, $3, 'news')",
+        [nationId, `${species.name} cultivation begun! ${tiles} tiles planted.`, tick]
+      );
+      break;
+    }
+
     case "FORUM_POST": {
       const content = ((action as any).content || "").trim();
       if (content.length > 5) {

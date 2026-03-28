@@ -29,7 +29,8 @@ export type AgentAction =
   | { type: "DIPLOMACY"; target_agent: number; action: string; params: Record<string, unknown> }
   | { type: "MILITARY"; action: string; params: Record<string, unknown> }
   | { type: "RENAME"; name: string }
-  | { type: "FORUM_POST"; content: string };
+  | { type: "FORUM_POST"; content: string }
+  | { type: "PLANT_CROP"; species_id: string; tiles: number };
 
 export interface LaborAssignment {
   task: string;
@@ -81,6 +82,8 @@ export interface WorldStateReport {
       wild_plants: Array<{ id: string; name: string; abundance: number; category: string }>;
       wild_animals: Array<{ id: string; name: string; abundance: number; domesticable: boolean }>;
     };
+    cultivated_crops: Array<{ id: string; name: string; tiles: number; climate_match: string }>;
+    available_crop_families: string[];
   };
   knowledge: {
     total_kp: number;
@@ -211,6 +214,30 @@ export async function buildWorldStateReport(
     return { id: sp.id, name: def?.name || sp.id, abundance: sp.abundance, domesticable: def?.domesticable || false };
   }).sort((a, b) => b.abundance - a.abundance).slice(0, 10);
 
+  // Cultivated crops
+  const { getAdjacentZones } = await import("./species-data.js");
+  const cropsResult = await client.query(
+    "SELECT species_id, tiles_planted FROM national_crops WHERE nation_id = $1 AND tiles_planted > 0",
+    [nationId]
+  ).catch(() => ({ rows: [] }));
+  const cultivatedCrops = cropsResult.rows.map((c: any) => {
+    const def = PLANT_SPECIES.find(p => p.id === c.species_id);
+    let match = "none";
+    if (def) {
+      if (def.climate_zones.includes(climateZone)) match = "optimal";
+      else if (def.climate_zones.some(z => getAdjacentZones(climateZone).includes(z))) match = "marginal";
+    }
+    return { id: c.species_id, name: def?.name || c.species_id, tiles: c.tiles_planted, climate_match: match };
+  });
+
+  // Which crop families could this nation research (have wild species for)?
+  const cropFamilies = new Set<string>();
+  for (const sp of territorySpecies.plants) {
+    const def = PLANT_SPECIES.find(p => p.id === sp.id);
+    if (def) cropFamilies.add(def.family);
+  }
+  const availableCropFamilies = Array.from(cropFamilies);
+
   // Recent validation errors
   const errors = await client.query(
     `SELECT data FROM events WHERE event_type = 'agent_action_failed' AND data->>'nation_id' = $1::text ORDER BY created_at DESC LIMIT 5`,
@@ -267,6 +294,8 @@ export async function buildWorldStateReport(
         wild_plants: wildPlants,
         wild_animals: wildAnimals,
       },
+      cultivated_crops: cultivatedCrops,
+      available_crop_families: availableCropFamilies,
     },
     knowledge: {
       total_kp: n.total_kp || 0,

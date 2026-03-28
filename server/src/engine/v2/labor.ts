@@ -199,6 +199,70 @@ export async function getTerritorySpecies(
 }
 
 /**
+ * Calculate farming yield from cultivated crops.
+ * Climate match matters: wrong zone = 0 yield. Irrigation extends by one band.
+ */
+export async function calculateCropFarmingYield(
+  client: pg.PoolClient,
+  nationId: number,
+  farmingHours: number,
+  farmingSkill: number,
+  season: string,
+  climateZone: string,
+  hasIrrigation: boolean,
+  hasFireTech: boolean,
+): Promise<number> {
+  if (farmingHours <= 0) return 0;
+
+  // Get cultivated crops
+  const crops = await client.query(
+    "SELECT species_id, tiles_planted FROM national_crops WHERE nation_id = $1 AND tiles_planted > 0",
+    [nationId]
+  );
+
+  if (crops.rows.length === 0) return 0;
+
+  let totalKcal = 0;
+  const adjacentZones = getAdjacentZones(climateZone);
+
+  for (const crop of crops.rows) {
+    const def = PLANT_SPECIES.find(p => p.id === crop.species_id);
+    if (!def || def.cultivated_kcal <= 0) continue;
+
+    // Climate match
+    let climateMod = 0;
+    if (def.climate_zones.includes(climateZone)) {
+      climateMod = 1.0;
+    } else if (def.climate_zones.some(z => adjacentZones.includes(z))) {
+      climateMod = hasIrrigation ? 0.5 : 0.2; // adjacent zone, irrigation helps
+    } else if (hasIrrigation) {
+      climateMod = 0.15; // wrong zone but irrigated = marginal
+    }
+
+    if (climateMod === 0) continue;
+
+    // Season modifier
+    let seasonMod = 1.0;
+    if (climateZone !== "tropical") {
+      if (season === "winter" && !def.frost_tolerant) seasonMod = 0;
+      else if (season === "winter" && def.frost_tolerant) seasonMod = 0.3;
+      else if (season === "spring") seasonMod = 0.8;
+      else if (season === "summer") seasonMod = 1.3;
+      else seasonMod = 1.1; // autumn harvest
+    }
+
+    // Water need penalty (high water crops in dry areas)
+    const waterMod = def.water_need === "high" && !hasIrrigation ? 0.5 : 1.0;
+
+    totalKcal += def.cultivated_kcal * crop.tiles_planted * climateMod * seasonMod * waterMod;
+  }
+
+  const skillMod = 0.5 + farmingSkill * 0.75;
+  const fireBonus = hasFireTech ? 1.3 : 1.0;
+  return (farmingHours / MAX_LABOR_HOURS) * totalKcal * skillMod * fireBonus;
+}
+
+/**
  * Get the primary climate zone for a nation's territory.
  */
 export async function getNationClimateZone(
