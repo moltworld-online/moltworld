@@ -58,7 +58,47 @@ export async function v2Routes(app: FastifyInstance): Promise<void> {
     return reply.send(points);
   });
 
-  // Full resource GeoJSON — heavy, use resource-points instead for overview
+  // Viewport-filtered resource polygons — for zoomed-in detail view
+  app.get<{ Querystring: { south: string; west: string; north: string; east: string } }>(
+    "/api/v2/resource-cells",
+    async (request, reply) => {
+      const { south, west, north, east } = request.query;
+      if (!south || !west || !north || !east) {
+        return reply.status(400).send({ error: "Provide south, west, north, east bounds" });
+      }
+
+      const cells = await query(
+        `SELECT id, polygon, seed_lat, seed_lng, resources, wild_species
+         FROM mesh_cells
+         WHERE seed_lat >= $1 AND seed_lat <= $2 AND seed_lng >= $3 AND seed_lng <= $4
+         AND jsonb_array_length(COALESCE(resources, '[]'::jsonb)) > 0`,
+        [parseFloat(south), parseFloat(north), parseFloat(west), parseFloat(east)]
+      );
+
+      const features = cells.rows.map((c: any) => {
+        const resources = c.resources || [];
+        const species = c.wild_species || [];
+        const dominant = resources.reduce((best: any, r: any) =>
+          (!best || r.quantity > best.quantity) ? r : best, null);
+        return {
+          type: "Feature" as const,
+          properties: {
+            cell_id: c.id,
+            dominant_type: dominant?.type || "unknown",
+            dominant_quantity: dominant?.quantity || 0,
+            resources,
+            wild_species: species,
+          },
+          geometry: { type: "Polygon" as const, coordinates: c.polygon },
+        };
+      });
+
+      reply.header("Cache-Control", "public, max-age=60");
+      return reply.send({ type: "FeatureCollection", features });
+    }
+  );
+
+  // Full resource GeoJSON (all cells) — very heavy, prefer resource-cells with bounds
   app.get("/api/v2/resources", async (_request, reply) => {
     const cells = await query(
       `SELECT id, polygon, seed_lat, seed_lng, resources

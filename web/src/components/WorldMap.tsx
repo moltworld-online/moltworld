@@ -103,6 +103,18 @@ function FlyTo({ target }: { target: { lat: number; lng: number; zoom: number } 
   return null;
 }
 
+// Zoom tracker — reports zoom level to parent
+function ZoomTracker({ onZoom }: { onZoom: (z: number) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    const handler = () => onZoom(map.getZoom());
+    map.on("zoomend", handler);
+    handler(); // initial
+    return () => { map.off("zoomend", handler); };
+  }, [map, onZoom]);
+  return null;
+}
+
 // Canvas-rendered resource layer — overlapping circles create a filled watercolor effect
 // Plus a single map-level mousemove handler for tooltips (not per-circle)
 function ResourceCanvasLayer({ points, filters }: { points: Array<[number, number, string, number]>; filters: Record<string, boolean> }) {
@@ -234,6 +246,88 @@ function ResourceCanvasLayer({ points, filters }: { points: Array<[number, numbe
   return null;
 }
 
+// Voronoi polygon layer — loaded only when zoomed in, only for visible viewport
+function ResourceVoronoiLayer({ filters }: { filters: Record<string, boolean> }) {
+  const map = useMap();
+  const [geojson, setGeojson] = useState<FeatureCollection | null>(null);
+  const [geoKey, setGeoKey] = useState(0);
+  const lastBoundsRef = useRef("");
+
+  useEffect(() => {
+    const fetchCells = async () => {
+      const bounds = map.getBounds();
+      const boundsKey = `${bounds.getSouth().toFixed(1)},${bounds.getWest().toFixed(1)},${bounds.getNorth().toFixed(1)},${bounds.getEast().toFixed(1)}`;
+      if (boundsKey === lastBoundsRef.current) return;
+      lastBoundsRef.current = boundsKey;
+
+      try {
+        const res = await fetch(
+          `/api/v2/resource-cells?south=${bounds.getSouth()}&west=${bounds.getWest()}&north=${bounds.getNorth()}&east=${bounds.getEast()}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          // Filter by active resource types
+          data.features = data.features.filter((f: any) => filters[f.properties?.dominant_type]);
+          setGeojson(data);
+          setGeoKey(k => k + 1);
+        }
+      } catch { /* ignore */ }
+    };
+
+    fetchCells();
+    map.on("moveend", fetchCells);
+    return () => { map.off("moveend", fetchCells); };
+  }, [map, filters]);
+
+  if (!geojson) return null;
+
+  return (
+    <GeoJSON
+      key={geoKey}
+      data={geojson}
+      style={(feature) => {
+        const props = feature?.properties;
+        const resType = props?.dominant_type || "unknown";
+        const qty = props?.dominant_quantity || 0;
+        const color = RESOURCE_COLORS[resType] || "#888";
+        const opacity = 0.12 + (qty / 10) * 0.28;
+        return {
+          color: color,
+          weight: 0.5,
+          opacity: 0.3,
+          fillColor: color,
+          fillOpacity: opacity,
+        };
+      }}
+      onEachFeature={(feature, layer) => {
+        const props = feature.properties;
+        const resources = props?.resources || [];
+        const species = props?.wild_species || [];
+
+        layer.on({
+          mouseover: (e: L.LeafletMouseEvent) => (e.target as L.Path).setStyle({ fillOpacity: 0.55, weight: 1.5 }),
+          mouseout: (e: L.LeafletMouseEvent) => {
+            const qty = props?.dominant_quantity || 0;
+            (e.target as L.Path).setStyle({ fillOpacity: 0.12 + (qty / 10) * 0.28, weight: 0.5 });
+          },
+        });
+
+        const resHtml = resources.map((r: any) =>
+          `<span style="color:${RESOURCE_COLORS[r.type] || '#888'};font-weight:600">${RESOURCE_LABELS[r.type] || r.type}</span>: ${r.quantity}/10`
+        ).join("<br/>");
+
+        const speciesNames = species.slice(0, 5).map((s: any) => s.id.replace(/_/g, " ")).join(", ");
+        const speciesHtml = speciesNames ? `<div style="margin-top:4px;color:#71717a;font-size:10px">Species: ${speciesNames}${species.length > 5 ? "..." : ""}</div>` : "";
+
+        layer.bindTooltip(
+          `<div style="font-family:Montserrat,sans-serif;font-size:11px;line-height:1.6">${resHtml}${speciesHtml}</div>`,
+          { sticky: true }
+        );
+      }}
+    />
+  );
+}
+
 interface WorldMapProps {
   flyToNation?: number | null;
   nations?: Array<{ id: number; name: string; color: string }>;
@@ -255,6 +349,8 @@ export default function WorldMap({ flyToNation, nations }: WorldMapProps) {
   const [resourceFilters, setResourceFilters] = useState<Record<string, boolean>>(
     Object.fromEntries(RESOURCE_TYPES.map((t) => [t, true]))
   );
+
+  const [mapZoom, setMapZoom] = useState(3);
 
   const toggleLayer = (key: string) => setLayers((p) => ({ ...p, [key]: !p[key] }));
   const toggleResource = (key: string) => setResourceFilters((p) => ({ ...p, [key]: !p[key] }));
@@ -354,9 +450,14 @@ export default function WorldMap({ flyToNation, nations }: WorldMapProps) {
         </Rectangle>
       ))}
 
-      {/* Resource points — lightweight canvas circles instead of 90K polygons */}
-      {layers.resources && resourcePoints && (
+      <ZoomTracker onZoom={setMapZoom} />
+
+      {/* Resources: canvas circles at low zoom, Voronoi polygons when zoomed in */}
+      {layers.resources && mapZoom < 8 && resourcePoints && (
         <ResourceCanvasLayer points={resourcePoints} filters={resourceFilters} />
+      )}
+      {layers.resources && mapZoom >= 8 && (
+        <ResourceVoronoiLayer filters={resourceFilters} />
       )}
 
       {/* Tectonic Hotspots */}
@@ -459,21 +560,21 @@ export default function WorldMap({ flyToNation, nations }: WorldMapProps) {
       ))}
 
       {/* Controls */}
-      <LayerPanel layers={layers} toggleLayer={toggleLayer} resourceFilters={resourceFilters} toggleResource={toggleResource} showResourceFilters={layers.resources} />
-      <ResourceLegend visible={layers.resources} resourceFilters={resourceFilters} />
+      <LayerPanel layers={layers} toggleLayer={toggleLayer} resourceFilters={resourceFilters} toggleResource={toggleResource} showResourceFilters={layers.resources} zoom={mapZoom} />
     </MapContainer>
   );
 }
 
 // ── Layer Control Panel ──
 function LayerPanel({
-  layers, toggleLayer, resourceFilters, toggleResource, showResourceFilters,
+  layers, toggleLayer, resourceFilters, toggleResource, showResourceFilters, zoom,
 }: {
   layers: Record<string, boolean>;
   toggleLayer: (k: string) => void;
   resourceFilters: Record<string, boolean>;
   toggleResource: (k: string) => void;
   showResourceFilters: boolean;
+  zoom: number;
 }) {
   const mainLayers = [
     { key: "resources", label: "Resources", color: "#eab308" },
@@ -488,6 +589,7 @@ function LayerPanel({
       position: "absolute", top: 12, right: 12, zIndex: 1000,
       background: "rgba(9,9,11,0.92)", backdropFilter: "blur(12px)",
       border: "1px solid #27272a", borderRadius: 10, padding: "10px 12px", minWidth: 170,
+      maxHeight: "calc(100vh - 80px)", overflowY: "auto",
     }}>
       <div style={{ fontSize: "0.58rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px", color: "#71717a", marginBottom: 8 }}>
         Layers
@@ -497,23 +599,27 @@ function LayerPanel({
       ))}
 
       {showResourceFilters && (
-        <>
-          <div style={{ borderTop: "1px solid #27272a", margin: "8px 0", paddingTop: 8 }}>
-            <div style={{ fontSize: "0.55rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px", color: "#52525b", marginBottom: 6 }}>
-              Resource Types
-            </div>
-            {RESOURCE_TYPES.map((t) => (
-              <LayerToggle
-                key={t}
-                label={RESOURCE_LABELS[t] || t}
-                color={RESOURCE_COLORS[t] || "#888"}
-                active={resourceFilters[t]}
-                onClick={() => toggleResource(t)}
-                small
-              />
-            ))}
+        <div style={{ borderTop: "1px solid #27272a", margin: "8px 0", paddingTop: 8 }}>
+          <div style={{ fontSize: "0.55rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px", color: "#52525b", marginBottom: 6 }}>
+            Resources
           </div>
-        </>
+          {RESOURCE_TYPES.map((t) => (
+            <LayerToggle
+              key={t}
+              label={RESOURCE_LABELS[t] || t}
+              color={RESOURCE_COLORS[t] || "#888"}
+              active={resourceFilters[t]}
+              onClick={() => toggleResource(t)}
+              small
+            />
+          ))}
+
+          {zoom >= 8 && (
+            <div style={{ marginTop: 6, fontSize: "0.5rem", color: "#52525b", fontStyle: "italic" }}>
+              Voronoi detail mode — hover for species
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
