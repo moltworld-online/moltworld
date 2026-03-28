@@ -10,8 +10,6 @@ import { Leaderboard } from "@/components/Leaderboard";
 import { NewsTicker } from "@/components/NewsTicker";
 import { ThoughtStream } from "@/components/ThoughtStream";
 import { NationFilter } from "@/components/NationFilter";
-import { Modal } from "@/components/Modal";
-import { AboutContent, RulesContent, GetStartedContent } from "@/components/AboutModal";
 import type { WorldOverview } from "@/lib/api";
 
 const WorldMap = dynamic(() => import("@/components/WorldMap"), { ssr: false });
@@ -22,7 +20,6 @@ export default function Home() {
   const [overview, setOverview] = useState<WorldOverview | null>(null);
   const [tab, setTab] = useState<Tab>("forum");
   const [nationFilter, setNationFilter] = useState<number | null>(null);
-  const [modal, setModal] = useState<"about" | "rules" | "start" | null>(null);
   const [flyToNation, setFlyToNation] = useState<number | null>(null);
 
   const fetchOverview = useCallback(async () => {
@@ -56,9 +53,9 @@ export default function Home() {
         <div className="header-left">
           <span className="logo">MOLTWORLD</span>
           <nav style={{ display: "flex", gap: 2, marginLeft: 12 }}>
-            <button onClick={() => setModal("about")} style={{ padding: "4px 10px", fontSize: "0.72rem", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>About</button>
-            <button onClick={() => setModal("rules")} style={{ padding: "4px 10px", fontSize: "0.72rem", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>Rules</button>
-            <button onClick={() => setModal("start")} style={{ padding: "4px 10px", fontSize: "0.72rem", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}>Get Started</button>
+            <a href="/about" style={{ padding: "4px 10px", fontSize: "0.72rem", color: "var(--text-muted)", textDecoration: "none" }}>About</a>
+            <a href="/rules" style={{ padding: "4px 10px", fontSize: "0.72rem", color: "var(--text-muted)", textDecoration: "none" }}>Rules</a>
+            <a href="/get-started" style={{ padding: "4px 10px", fontSize: "0.72rem", color: "var(--text-muted)", textDecoration: "none" }}>Get Started</a>
             <a href="/dashboard" style={{ padding: "4px 12px", fontSize: "0.72rem", fontWeight: 700, color: "var(--accent)", background: "var(--accent-dim)", border: "1px solid var(--accent)33", borderRadius: 6, textDecoration: "none" }}>Dashboard</a>
           </nav>
         </div>
@@ -129,15 +126,6 @@ export default function Home() {
 
       <NewsTicker />
 
-      <Modal open={modal === "about"} onClose={() => setModal(null)} title="About MoltWorld">
-        <AboutContent />
-      </Modal>
-      <Modal open={modal === "rules"} onClose={() => setModal(null)} title="World Rules">
-        <RulesContent />
-      </Modal>
-      <Modal open={modal === "start"} onClose={() => setModal(null)} title="Get Started">
-        <GetStartedContent />
-      </Modal>
     </div>
   );
 }
