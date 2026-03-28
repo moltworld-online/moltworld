@@ -104,9 +104,11 @@ function FlyTo({ target }: { target: { lat: number; lng: number; zoom: number } 
 }
 
 // Canvas-rendered resource layer — overlapping circles create a filled watercolor effect
+// Plus a single map-level mousemove handler for tooltips (not per-circle)
 function ResourceCanvasLayer({ points, filters }: { points: Array<[number, number, string, number]>; filters: Record<string, boolean> }) {
   const map = useMap();
   const layerRef = useRef<L.LayerGroup | null>(null);
+  const tooltipRef = useRef<L.Tooltip | null>(null);
   const [zoom, setZoom] = useState(3);
 
   useEffect(() => {
@@ -115,6 +117,9 @@ function ResourceCanvasLayer({ points, filters }: { points: Array<[number, numbe
     return () => { map.off("zoomend", onZoom); };
   }, [map]);
 
+  // Build spatial index for fast nearest-point lookup
+  const filteredPoints = useRef<Array<[number, number, string, number]>>([]);
+
   useEffect(() => {
     if (layerRef.current) {
       map.removeLayer(layerRef.current);
@@ -122,14 +127,13 @@ function ResourceCanvasLayer({ points, filters }: { points: Array<[number, numbe
 
     const canvasRenderer = L.canvas({ padding: 0.5 });
     const group = L.layerGroup();
+    const visible: Array<[number, number, string, number]> = [];
 
-    // Scale radius with zoom: larger at high zoom, smaller at low zoom
-    // At zoom 3 (world view): radius ~5 creates a filled look with slight overlap
-    // At zoom 7+: radius grows to show individual cell detail
     const baseRadius = zoom <= 3 ? 4 : zoom <= 5 ? 5 : zoom <= 7 ? 7 : Math.min(12, zoom * 1.2);
 
     for (const [lat, lng, type, qty] of points) {
       if (!filters[type]) continue;
+      visible.push([lat, lng, type, qty]);
       const color = RESOURCE_COLORS[type] || "#888";
       const radius = baseRadius + (qty / 10) * 2;
       const opacity = 0.18 + (qty / 10) * 0.22;
@@ -145,6 +149,7 @@ function ResourceCanvasLayer({ points, filters }: { points: Array<[number, numbe
       }).addTo(group);
     }
 
+    filteredPoints.current = visible;
     group.addTo(map);
     layerRef.current = group;
 
@@ -154,6 +159,77 @@ function ResourceCanvasLayer({ points, filters }: { points: Array<[number, numbe
       }
     };
   }, [map, points, filters, zoom]);
+
+  // Single mousemove handler — finds nearest resource point and shows tooltip
+  useEffect(() => {
+    let lastTooltipKey = "";
+
+    const onMouseMove = (e: L.LeafletMouseEvent) => {
+      const { lat, lng } = e.latlng;
+      const pts = filteredPoints.current;
+      if (pts.length === 0) return;
+
+      // Find closest point within ~1.5 degrees (fast linear scan is fine at this scale)
+      let bestDist = Infinity;
+      let bestIdx = -1;
+      const threshold = zoom <= 4 ? 3 : zoom <= 6 ? 1.5 : 0.8;
+
+      for (let i = 0; i < pts.length; i++) {
+        const dlat = pts[i][0] - lat;
+        const dlng = pts[i][1] - lng;
+        const d = dlat * dlat + dlng * dlng;
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = i;
+        }
+      }
+
+      if (bestIdx === -1 || Math.sqrt(bestDist) > threshold) {
+        if (tooltipRef.current) {
+          map.closeTooltip(tooltipRef.current);
+          tooltipRef.current = null;
+          lastTooltipKey = "";
+        }
+        return;
+      }
+
+      const [pLat, pLng, pType, pQty] = pts[bestIdx];
+      const key = `${pLat},${pLng}`;
+      if (key === lastTooltipKey) return;
+      lastTooltipKey = key;
+
+      // Find ALL resources at this point (multiple types can overlap)
+      const allAtPoint = pts.filter(p => p[0] === pLat && p[1] === pLng);
+      const html = allAtPoint.map(([, , t, q]) =>
+        `<span style="color:${RESOURCE_COLORS[t] || '#888'}; font-weight:600">${RESOURCE_LABELS[t] || t}</span>: ${q}/10`
+      ).join("<br/>");
+
+      if (tooltipRef.current) {
+        map.closeTooltip(tooltipRef.current);
+      }
+
+      tooltipRef.current = L.tooltip({ permanent: false, direction: "top", offset: [0, -8] })
+        .setLatLng([pLat, pLng])
+        .setContent(`<div style="font-family:Montserrat,sans-serif;font-size:11px;line-height:1.6">${html}</div>`)
+        .addTo(map);
+    };
+
+    const onMouseOut = () => {
+      if (tooltipRef.current) {
+        map.closeTooltip(tooltipRef.current);
+        tooltipRef.current = null;
+        lastTooltipKey = "";
+      }
+    };
+
+    map.on("mousemove", onMouseMove);
+    map.on("mouseout", onMouseOut);
+    return () => {
+      map.off("mousemove", onMouseMove);
+      map.off("mouseout", onMouseOut);
+      if (tooltipRef.current) map.closeTooltip(tooltipRef.current);
+    };
+  }, [map, zoom]);
 
   return null;
 }
@@ -467,17 +543,33 @@ function LayerToggle({ label, color, active, onClick, small }: {
 function ResourceLegend({ visible, resourceFilters }: { visible: boolean; resourceFilters: Record<string, boolean> }) {
   if (!visible) return null;
 
-  const activeCount = RESOURCE_TYPES.filter((t) => resourceFilters[t]).length;
-  const activeRegions = RESOURCE_REGIONS.filter((r) => resourceFilters[r.type]);
+  const activeTypes = RESOURCE_TYPES.filter((t) => resourceFilters[t]);
 
   return (
     <div style={{
       position: "absolute", bottom: 12, left: 12, zIndex: 1000,
       background: "rgba(9,9,11,0.92)", backdropFilter: "blur(12px)",
-      border: "1px solid #27272a", borderRadius: 10, padding: "10px 14px",
+      border: "1px solid #27272a", borderRadius: 10, padding: "10px 14px", minWidth: 140,
     }}>
-      <div style={{ fontSize: "0.58rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px", color: "#71717a", marginBottom: 4 }}>
-        {activeRegions.length} resource regions &middot; {activeCount} types active
+      <div style={{ fontSize: "0.58rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px", color: "#71717a", marginBottom: 8 }}>
+        Resources
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "3px 12px" }}>
+        {activeTypes.map((t) => (
+          <div key={t} style={{ display: "flex", alignItems: "center", gap: 5, padding: "1px 0" }}>
+            <span style={{
+              width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+              background: RESOURCE_COLORS[t] || "#888",
+              boxShadow: `0 0 4px ${RESOURCE_COLORS[t] || "#888"}66`,
+            }} />
+            <span style={{ fontSize: "0.6rem", color: "#a1a1aa" }}>
+              {RESOURCE_LABELS[t] || t}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: "0.5rem", color: "#52525b", marginTop: 6, borderTop: "1px solid #27272a", paddingTop: 5 }}>
+        Hover over the map to see resources
       </div>
     </div>
   );
