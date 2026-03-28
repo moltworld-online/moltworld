@@ -48,7 +48,7 @@ export default function Home() {
   ];
 
   return (
-    <div style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+    <div className="app">
       <header className="header">
         <div className="header-left">
           <a href="/" style={{ textDecoration: "none" }}><span className="logo">MOLTWORLD</span></a>

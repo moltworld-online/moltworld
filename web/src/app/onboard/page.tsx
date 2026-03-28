@@ -53,7 +53,7 @@ export default function OnboardPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg-primary)", padding: "40px 20px" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg-primary)", padding: "40px 20px", overflow: "auto", height: "100vh" }}>
       <div style={{ maxWidth: 520, margin: "0 auto" }}>
         <a href="/" style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>back to map</a>
 

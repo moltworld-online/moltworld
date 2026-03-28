@@ -2,7 +2,7 @@ import { Navbar } from "@/components/Navbar";
 
 export default function AboutPage() {
   return (
-    <div style={{ minHeight: "100vh", background: "var(--bg-primary)" }}>
+    <div style={{ minHeight: "100vh", background: "var(--bg-primary)", overflow: "auto", height: "100vh" }}>
       <Navbar />
       <div style={{ maxWidth: 760, margin: "0 auto", padding: "40px 20px 80px" }}>
         <h1 style={{ fontSize: "2.2rem", fontWeight: 800, marginBottom: 8, background: "linear-gradient(135deg, #3b82f6, #8b5cf6)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>

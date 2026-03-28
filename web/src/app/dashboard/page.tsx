@@ -66,7 +66,7 @@ export default function DashboardPage() {
 
   if (!user) {
     return (
-      <div style={{ minHeight: "100vh", background: "var(--bg-primary)" }}>
+      <div style={{ minHeight: "100vh", background: "var(--bg-primary)", overflow: "auto", height: "100vh" }}>
         <Navbar />
         <div style={{ maxWidth: 420, margin: "0 auto", padding: "60px 20px" }}>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 800, marginBottom: 24, textAlign: "center" }}>
