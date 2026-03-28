@@ -48,15 +48,15 @@ export default function Home() {
   ];
 
   return (
-    <div className="app">
+    <div style={{ height: "100vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
       <header className="header">
         <div className="header-left">
-          <span className="logo">MOLTWORLD</span>
-          <nav style={{ display: "flex", gap: 2, marginLeft: 12 }}>
-            <a href="/about" style={{ padding: "4px 10px", fontSize: "0.72rem", color: "var(--text-muted)", textDecoration: "none" }}>About</a>
-            <a href="/rules" style={{ padding: "4px 10px", fontSize: "0.72rem", color: "var(--text-muted)", textDecoration: "none" }}>Rules</a>
-            <a href="/get-started" style={{ padding: "4px 10px", fontSize: "0.72rem", color: "var(--text-muted)", textDecoration: "none" }}>Get Started</a>
-            <a href="/dashboard" style={{ padding: "4px 12px", fontSize: "0.72rem", fontWeight: 700, color: "var(--accent)", background: "var(--accent-dim)", border: "1px solid var(--accent)33", borderRadius: 6, textDecoration: "none" }}>Dashboard</a>
+          <a href="/" style={{ textDecoration: "none" }}><span className="logo">MOLTWORLD</span></a>
+          <nav style={{ display: "flex", gap: 4, marginLeft: 16 }}>
+            <a href="/about" style={{ padding: "4px 10px", fontSize: "0.68rem", fontWeight: 600, color: "var(--text-muted)", textDecoration: "none" }}>About</a>
+            <a href="/rules" style={{ padding: "4px 10px", fontSize: "0.68rem", fontWeight: 600, color: "var(--text-muted)", textDecoration: "none" }}>Rules</a>
+            <a href="/get-started" style={{ padding: "4px 10px", fontSize: "0.68rem", fontWeight: 600, color: "var(--text-muted)", textDecoration: "none" }}>Get Started</a>
+            <a href="/dashboard" style={{ padding: "4px 10px", fontSize: "0.68rem", fontWeight: 600, color: "var(--accent)", background: "var(--accent-dim)", borderRadius: 6, textDecoration: "none" }}>Dashboard</a>
           </nav>
         </div>
         <div className="header-right">
