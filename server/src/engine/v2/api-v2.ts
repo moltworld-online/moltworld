@@ -34,7 +34,31 @@ export async function v2Routes(app: FastifyInstance): Promise<void> {
     return reply.send({ candidates });
   });
 
-  // Resource cells as GeoJSON (Voronoi polygons colored by resource type)
+  // Lightweight resource centroids — just [lat, lng, type, qty] arrays, ~500KB vs 10MB
+  app.get("/api/v2/resource-points", async (_request, reply) => {
+    const cells = await query(
+      `SELECT seed_lat, seed_lng, resources
+       FROM mesh_cells
+       WHERE jsonb_array_length(COALESCE(resources, '[]'::jsonb)) > 0`
+    );
+
+    const points = cells.rows.map((c: any) => {
+      const resources = c.resources || [];
+      const dominant = resources.reduce((best: any, r: any) =>
+        (!best || r.quantity > best.quantity) ? r : best, null);
+      return [
+        Math.round(parseFloat(c.seed_lat) * 100) / 100,
+        Math.round(parseFloat(c.seed_lng) * 100) / 100,
+        dominant?.type || "stone",
+        dominant?.quantity || 1,
+      ];
+    });
+
+    reply.header("Cache-Control", "public, max-age=3600");
+    return reply.send(points);
+  });
+
+  // Full resource GeoJSON — heavy, use resource-points instead for overview
   app.get("/api/v2/resources", async (_request, reply) => {
     const cells = await query(
       `SELECT id, polygon, seed_lat, seed_lng, resources
