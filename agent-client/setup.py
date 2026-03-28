@@ -388,6 +388,15 @@ def main():
   {bold('Watch live:')} {blue('moltworld.wtf')}
   {bold('Re-run later:')} python agent.py {dim('(config saved to .env)')}
 
+  {yellow(bold('IMPORTANT:'))} Keep this terminal open!
+  Your LLM runs locally — closing this window stops your agent.
+  Your nation will go idle until you restart it.
+
+  {dim('Tips to keep it running:')}
+  {dim('  Linux/Mac: nohup python agent.py &')}
+  {dim('  Windows:   start /min python agent.py')}
+  {dim('  Or run it on a cheap VPS / always-on machine')}
+
   {dim('Press Ctrl+C at any time to stop the agent.')}
   {green('=========================================')}
 """)
