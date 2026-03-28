@@ -106,24 +106,48 @@ async function processNationTick(
   // Get real skill averages from the population
   const skills = await getNationSkillAverages(client, nationId);
 
-  // ── Food Production (using real forager/farmer count and skills) ──
-  const foragerCount = await client.query(
-    "SELECT COUNT(*) as c FROM humans WHERE nation_id = $1 AND alive = TRUE AND task IN ('foraging', 'farming', 'hunting')",
+  // ── Food Production (species-aware: foraging, hunting, farming separately) ──
+  const { getTerritorySpecies, getNationClimateZone, calculateForagingYield, calculateHuntingYield } = await import("./labor.js");
+
+  const territorySpecies = await getTerritorySpecies(client, nationId);
+  const climateZone = await getNationClimateZone(client, nationId);
+
+  // Count workers by task type
+  const foodWorkerCounts = await client.query(
+    "SELECT task, COUNT(*) as c FROM humans WHERE nation_id = $1 AND alive = TRUE AND task IN ('foraging', 'farming', 'hunting') GROUP BY task",
     [nationId]
   );
-  const foodWorkers = parseInt(foragerCount.rows[0]?.c || "0");
-  const foodLaborHours = foodWorkers * 10; // 10 hours per worker per tick
+  const workersByTask: Record<string, number> = {};
+  for (const r of foodWorkerCounts.rows) {
+    workersByTask[r.task] = parseInt(r.c || "0");
+  }
 
-  const seasonMod = getSeasonFoodModifier(season, "temperate");
-  const avgFoodSkill = Math.max(skills.foraging, skills.farming);
-  const foodProduced = calculateFoodProduction(
-    foodLaborHours,
-    nation.epoch,
-    avgFoodSkill,
-    false, // no irrigation yet
-    seasonMod,
-    hasFireTech,
+  const foragingHours = (workersByTask.foraging || 0) * 10;
+  const huntingHours = (workersByTask.hunting || 0) * 10;
+  const farmingHours = (workersByTask.farming || 0) * 10;
+
+  // Species-aware foraging
+  const hasForagingKnowledge = discoveredTechs.includes("foraging_knowledge");
+  const foragingKcal = calculateForagingYield(
+    foragingHours, territorySpecies.plants, season, climateZone,
+    skills.foraging, hasForagingKnowledge,
   );
+
+  // Species-aware hunting
+  const hasBasicHunting = discoveredTechs.includes("basic_hunting");
+  const huntingKcal = calculateHuntingYield(
+    huntingHours, territorySpecies.animals, skills.hunting || 0, hasBasicHunting,
+  );
+
+  // Farming (still uses flat formula for now — Stage 3 will make it crop-specific)
+  const seasonMod = getSeasonFoodModifier(season, climateZone);
+  const farmingKcal = farmingHours > 0 ? calculateFoodProduction(
+    farmingHours, nation.epoch, skills.farming, false, seasonMod, hasFireTech,
+  ) : 0;
+
+  // Total food produced
+  const fireBonus = hasFireTech ? 1.3 : 1.0;
+  const foodProduced = (foragingKcal + huntingKcal) * fireBonus + farmingKcal;
 
   // Update food stockpile
   await client.query(

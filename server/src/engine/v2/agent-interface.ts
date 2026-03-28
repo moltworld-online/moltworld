@@ -76,6 +76,11 @@ export interface WorldStateReport {
     food_production_per_tick: number;
     food_consumption_per_tick: number;
     ticks_of_food_remaining: number;
+    climate_zone: string;
+    territory_species: {
+      wild_plants: Array<{ id: string; name: string; abundance: number; category: string }>;
+      wild_animals: Array<{ id: string; name: string; abundance: number; domesticable: boolean }>;
+    };
   };
   knowledge: {
     total_kp: number;
@@ -190,6 +195,22 @@ export async function buildWorldStateReport(
   const foodPerTick = n.population * 2000; // simplified
   const ticksOfFood = foodPerTick > 0 ? Math.floor((n.food_kcal || 0) / foodPerTick) : 0;
 
+  // Territory species and climate
+  const { getTerritorySpecies, getNationClimateZone } = await import("./labor.js");
+  const { PLANT_SPECIES, ANIMAL_SPECIES } = await import("./species-data.js");
+  const territorySpecies = await getTerritorySpecies(client, nationId);
+  const climateZone = await getNationClimateZone(client, nationId);
+
+  const wildPlants = territorySpecies.plants.map(sp => {
+    const def = PLANT_SPECIES.find(p => p.id === sp.id);
+    return { id: sp.id, name: def?.name || sp.id, abundance: sp.abundance, category: def?.category || "unknown" };
+  }).sort((a, b) => b.abundance - a.abundance).slice(0, 15);
+
+  const wildAnimals = territorySpecies.animals.map(sp => {
+    const def = ANIMAL_SPECIES.find(a => a.id === sp.id);
+    return { id: sp.id, name: def?.name || sp.id, abundance: sp.abundance, domesticable: def?.domesticable || false };
+  }).sort((a, b) => b.abundance - a.abundance).slice(0, 10);
+
   // Recent validation errors
   const errors = await client.query(
     `SELECT data FROM events WHERE event_type = 'agent_action_failed' AND data->>'nation_id' = $1::text ORDER BY created_at DESC LIMIT 5`,
@@ -241,6 +262,11 @@ export async function buildWorldStateReport(
       food_production_per_tick: lastTickReport?.foodProduced || 0,
       food_consumption_per_tick: lastTickReport?.foodConsumed || 0,
       ticks_of_food_remaining: ticksOfFood,
+      climate_zone: climateZone,
+      territory_species: {
+        wild_plants: wildPlants,
+        wild_animals: wildAnimals,
+      },
     },
     knowledge: {
       total_kp: n.total_kp || 0,

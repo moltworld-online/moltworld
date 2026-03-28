@@ -97,6 +97,121 @@ export function calculateFoodProduction(
   return (laborHours / MAX_LABOR_HOURS) * baseOutput * skillMultiplier * seasonModifier * fireBonus;
 }
 
+// ── Species-aware food production (Stage 2) ──
+
+import { PLANT_SPECIES, ANIMAL_SPECIES, getClimateZone, getAdjacentZones } from "./species-data.js";
+
+export interface TerritorySpecies {
+  plants: Array<{ id: string; abundance: number }>;
+  animals: Array<{ id: string; abundance: number }>;
+}
+
+/**
+ * Calculate foraging yield based on what wild plants exist in territory.
+ * Tropical territories with bananas/yams = higher yields.
+ * Arctic territories with sparse berries = lower yields.
+ */
+export function calculateForagingYield(
+  laborHours: number,
+  plants: Array<{ id: string; abundance: number }>,
+  season: string,
+  climateZone: string,
+  foragingSkill: number,
+  hasForagingKnowledge: boolean,
+): number {
+  if (laborHours <= 0 || plants.length === 0) return 0;
+
+  let baseKcal = 0;
+  for (const sp of plants) {
+    const def = PLANT_SPECIES.find(p => p.id === sp.id);
+    if (!def || def.wild_kcal <= 0) continue;
+    baseKcal += def.wild_kcal * sp.abundance;
+  }
+
+  // Season modifier (simplified: winter halves yield in non-tropical)
+  let seasonMod = 1.0;
+  if (climateZone !== "tropical") {
+    if (season === "winter") seasonMod = 0.3;
+    else if (season === "spring") seasonMod = 0.8;
+    else if (season === "summer") seasonMod = 1.3;
+    else seasonMod = 1.1; // autumn
+  }
+
+  const skillMod = 0.5 + foragingSkill * 0.75;
+  const knowledgeMod = hasForagingKnowledge ? 1.5 : 1.0;
+
+  return (laborHours / MAX_LABOR_HOURS) * baseKcal * skillMod * knowledgeMod * seasonMod;
+}
+
+/**
+ * Calculate hunting yield based on what wild animals exist in territory.
+ * Requires basic_hunting tech to hunt at all.
+ */
+export function calculateHuntingYield(
+  laborHours: number,
+  animals: Array<{ id: string; abundance: number }>,
+  huntingSkill: number,
+  hasBasicHunting: boolean,
+): number {
+  if (laborHours <= 0 || !hasBasicHunting || animals.length === 0) return 0;
+
+  let baseKcal = 0;
+  for (const sp of animals) {
+    const def = ANIMAL_SPECIES.find(a => a.id === sp.id);
+    if (!def || def.wild_hunt_kcal <= 0) continue;
+    baseKcal += def.wild_hunt_kcal * sp.abundance * 0.1; // 10% hunt success base
+  }
+
+  const skillMod = 0.3 + huntingSkill * 0.85;
+  return (laborHours / MAX_LABOR_HOURS) * baseKcal * skillMod;
+}
+
+/**
+ * Aggregate species from all mesh cells a nation owns.
+ * Deduplicates by species ID, sums abundance.
+ */
+export async function getTerritorySpecies(
+  client: pg.PoolClient,
+  nationId: number,
+): Promise<TerritorySpecies> {
+  const result = await client.query(
+    `SELECT wild_species FROM mesh_cells WHERE owner_id = $1 AND jsonb_array_length(COALESCE(wild_species, '[]'::jsonb)) > 0`,
+    [nationId]
+  );
+
+  const plantMap = new Map<string, number>();
+  const animalMap = new Map<string, number>();
+
+  for (const row of result.rows) {
+    for (const sp of (row.wild_species || [])) {
+      const id = sp.id;
+      const abundance = sp.abundance || 1;
+      const isPlant = PLANT_SPECIES.some(p => p.id === id);
+      const map = isPlant ? plantMap : animalMap;
+      map.set(id, Math.max(map.get(id) || 0, abundance)); // use max abundance, not sum
+    }
+  }
+
+  return {
+    plants: Array.from(plantMap.entries()).map(([id, abundance]) => ({ id, abundance })),
+    animals: Array.from(animalMap.entries()).map(([id, abundance]) => ({ id, abundance })),
+  };
+}
+
+/**
+ * Get the primary climate zone for a nation's territory.
+ */
+export async function getNationClimateZone(
+  client: pg.PoolClient,
+  nationId: number,
+): Promise<string> {
+  const result = await client.query(
+    `SELECT climate_zone, COUNT(*) as c FROM mesh_cells WHERE owner_id = $1 AND climate_zone IS NOT NULL GROUP BY climate_zone ORDER BY c DESC LIMIT 1`,
+    [nationId]
+  );
+  return result.rows[0]?.climate_zone || "temperate";
+}
+
 /**
  * Calculate resource extraction (wood, stone, clay, etc.)
  *
