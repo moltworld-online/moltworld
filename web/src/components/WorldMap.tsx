@@ -103,10 +103,17 @@ function FlyTo({ target }: { target: { lat: number; lng: number; zoom: number } 
   return null;
 }
 
-// Canvas-rendered resource points — renders 90K+ points without killing the browser
+// Canvas-rendered resource layer — overlapping circles create a filled watercolor effect
 function ResourceCanvasLayer({ points, filters }: { points: Array<[number, number, string, number]>; filters: Record<string, boolean> }) {
   const map = useMap();
   const layerRef = useRef<L.LayerGroup | null>(null);
+  const [zoom, setZoom] = useState(3);
+
+  useEffect(() => {
+    const onZoom = () => setZoom(map.getZoom());
+    map.on("zoomend", onZoom);
+    return () => { map.off("zoomend", onZoom); };
+  }, [map]);
 
   useEffect(() => {
     if (layerRef.current) {
@@ -116,11 +123,16 @@ function ResourceCanvasLayer({ points, filters }: { points: Array<[number, numbe
     const canvasRenderer = L.canvas({ padding: 0.5 });
     const group = L.layerGroup();
 
+    // Scale radius with zoom: larger at high zoom, smaller at low zoom
+    // At zoom 3 (world view): radius ~5 creates a filled look with slight overlap
+    // At zoom 7+: radius grows to show individual cell detail
+    const baseRadius = zoom <= 3 ? 4 : zoom <= 5 ? 5 : zoom <= 7 ? 7 : Math.min(12, zoom * 1.2);
+
     for (const [lat, lng, type, qty] of points) {
       if (!filters[type]) continue;
       const color = RESOURCE_COLORS[type] || "#888";
-      const radius = Math.max(2, qty * 0.4);
-      const opacity = 0.15 + (qty / 10) * 0.35;
+      const radius = baseRadius + (qty / 10) * 2;
+      const opacity = 0.18 + (qty / 10) * 0.22;
 
       L.circleMarker([lat, lng], {
         renderer: canvasRenderer,
@@ -141,7 +153,7 @@ function ResourceCanvasLayer({ points, filters }: { points: Array<[number, numbe
         map.removeLayer(layerRef.current);
       }
     };
-  }, [map, points, filters]);
+  }, [map, points, filters, zoom]);
 
   return null;
 }
