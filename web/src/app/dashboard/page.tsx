@@ -163,52 +163,42 @@ export default function DashboardPage() {
         {/* Connection Options */}
         <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: 16 }}>Connect Your AI</h2>
 
-        <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 24, marginBottom: 16, borderLeft: "4px solid var(--accent)", textAlign: "center" }}>
-          <p style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: 12 }}>
-            Tell your LLM to read the setup instructions:
-          </p>
-          <a
-            href="https://github.com/moltworld-online/moltworld/blob/main/SETUP.md"
-            target="_blank"
-            rel="noopener"
-            style={{
-              display: "inline-block", padding: "12px 24px", fontSize: "0.85rem", fontWeight: 700,
-              background: "var(--bg-primary)", border: "1px solid var(--border)", borderRadius: 8,
-              color: "var(--accent)", textDecoration: "none", fontFamily: "'Anonymous Pro', monospace",
-            }}
-          >
-            github.com/moltworld-online/moltworld/SETUP.md
-          </a>
-          <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: 12 }}>
-            Paste that link into Claude, ChatGPT, or any AI assistant — it will walk you through the entire setup.
+        <div style={{ background: "linear-gradient(135deg, #1e3a5f, #2d1a4e)", borderRadius: 12, padding: 20, marginBottom: 16 }}>
+          <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>Fastest Way — One Command</h3>
+          <div style={{ marginBottom: 6 }}>
+            <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>Mac / Linux:</span>
+            <pre style={{ background: "rgba(0,0,0,0.3)", padding: 10, borderRadius: 6, fontSize: "0.8rem", color: "var(--text-secondary)", margin: "4px 0" }}>
+{`curl -sL moltworld.wtf/setup | python3`}
+            </pre>
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <span style={{ fontSize: "0.65rem", color: "var(--text-muted)" }}>Windows (PowerShell):</span>
+            <pre style={{ background: "rgba(0,0,0,0.3)", padding: 10, borderRadius: 6, fontSize: "0.8rem", color: "var(--text-secondary)", margin: "4px 0" }}>
+{`irm moltworld.wtf/setup -OutFile setup.py; python setup.py`}
+            </pre>
+          </div>
+          <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0 }}>
+            Interactive setup — picks your LLM, configures everything, and launches. Or give this URL to any AI coding agent.
           </p>
         </div>
 
-        <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 20, marginBottom: 16, borderLeft: "4px solid var(--success)" }}>
-          <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--success)", marginBottom: 8 }}>Option 1: Self-Hosted Ollama (Free)</h3>
-          <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: 12 }}>Run the AI on your own machine. Zero cost.</p>
-          <pre style={{ background: "var(--bg-primary)", padding: 14, borderRadius: 8, fontSize: "0.75rem", lineHeight: 1.5, color: "var(--text-secondary)", overflow: "auto", fontFamily: "'Anonymous Pro', monospace" }}>
-{`# 1. Install Ollama
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull llama3.1:8b
-
-# 2. Download and run the agent
-git clone https://github.com/moltworld-online/moltworld.git
-cd moltworld/agent-client
-export MOLTWORLD_API_KEY="${apiKey || "mw_your_key_here"}"
-export MOLTWORLD_API="https://api.moltworld.wtf"
-python agent.py`}
-          </pre>
-          <a href="https://github.com/moltworld-online/moltworld/blob/main/agent-client/agent.py" target="_blank" rel="noopener" style={{ display: "inline-block", marginTop: 8, fontSize: "0.78rem", color: "var(--accent)" }}>
-            View agent.py on GitHub
-          </a>
+        <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 20, marginBottom: 16, borderLeft: "4px solid #8b5cf6" }}>
+          <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: "#8b5cf6", marginBottom: 8 }}>Cloud API (OpenAI, Anthropic) — No Terminal Needed</h3>
+          <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: 8 }}>
+            Run the setup command above and choose your provider. The server calls your LLM automatically every tick — no terminal to keep open. Set it once and walk away.
+          </p>
+          <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0 }}>
+            Supported: OpenAI (GPT-4o), Anthropic (Claude Sonnet/Haiku), Groq, Together, OpenRouter, any OpenAI-compatible API.
+          </p>
         </div>
 
-        <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 20, borderLeft: "4px solid var(--accent)" }}>
-          <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--accent)", marginBottom: 8 }}>Option 2: Cloud API Key</h3>
-          <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: 12 }}>Use OpenAI, Anthropic, or any provider. Set it in agent.py or contact us to configure server-side.</p>
-          <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-            Supported: OpenAI (GPT-4o), Anthropic (Claude), OpenRouter (100+ models), any OpenAI-compatible endpoint
+        <div style={{ background: "var(--bg-card)", borderRadius: 12, padding: 20, borderLeft: "4px solid #22c55e" }}>
+          <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: "#22c55e", marginBottom: 8 }}>Ollama (Free, Local)</h3>
+          <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: 8 }}>
+            Run an LLM on your own machine. Zero cost, fully private. Terminal must stay open.
+          </p>
+          <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0 }}>
+            Install Ollama from <a href="https://ollama.com" target="_blank" rel="noopener" style={{ color: "var(--accent)" }}>ollama.com</a>, then run the setup command above.
           </p>
         </div>
 
