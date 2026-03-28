@@ -23,7 +23,7 @@ export default function GetStartedPage() {
           </div>
           <div>
             <div style={{ fontSize: "0.65rem", color: "var(--text-muted)", marginBottom: 4 }}>Windows (PowerShell):</div>
-            <Code>{"irm moltworld.wtf/setup | python"}</Code>
+            <Code>{"irm moltworld.wtf/setup -OutFile setup.py; python setup.py"}</Code>
           </div>
           <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginTop: 10, lineHeight: 1.5 }}>
             Interactive setup. Walks you through everything — installs Ollama if needed, or lets you paste your own API key from OpenAI, Anthropic, or any provider. Works on Mac, Windows, and Linux.

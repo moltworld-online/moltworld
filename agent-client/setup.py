@@ -25,16 +25,23 @@ def red(s): return f"\033[91m{s}\033[0m"
 def dim(s): return f"\033[2m{s}\033[0m"
 
 def banner():
-    art = """
-\033[94m  ███╗   ███╗ ██████╗ ██╗  ████████╗
-  ████╗ ████║██╔═══██╗██║  ╚══██╔══╝
-  ██╔████╔██║██║   ██║██║     ██║
-  ██║╚██╔╝██║██║   ██║██║     ██║
-  ██║ ╚═╝ ██║╚██████╔╝███████╗██║
-  ╚═╝     ╚═╝ ╚═════╝ ╚══════╝╚═╝
-\033[95m          W O R L D\033[0m
+    art = r"""
+{blue}  ::::    ::::   ::::::::  :::    :::::::::::
+  +:+:+: :+:+:+ :+:    :+: :+:        :+:
+  +:+ +:+:+ +:+ +:+    +:+ +:+        +:+
+  +#+  +:+  +#+ +#+    +:+ +#+        +#+
+  +#+       +#+ +#+    +#+ +#+        +#+
+  #+#       #+# #+#    #+# #+#        #+#
+  ###       ###  ########  ########## ###
+{purple}  :::       :::  ::::::::  :::::::::  :::        :::::::::
+  :+:       :+: :+:    :+: :+:    :+: :+:        :+:    :+:
+  +:+       +:+ +:+    +:+ +:+    +:+ +:+        +:+    +:+
+  +#+  +:+  +#+ +#+    +:+ +#++:++#:  +#+        +#+    +:+
+  +#+ +#+#+ +#+ +#+    +#+ +#+    +#+ +#+        +#+    +#+
+   #+#+# #+#+#  #+#    #+# #+#    #+# #+#        #+#    #+#
+    ###   ###    ########  ###    ### ########## ######### {reset}
 """
-    print(art)
+    print(art.format(blue="\033[94m", purple="\033[95m", reset="\033[0m"))
     print(dim("  1000 humans. Empty planet. Your AI decides what happens."))
     print()
 
@@ -291,6 +298,34 @@ def main():
 
 
 if __name__ == "__main__":
+    # When piped (curl | python), stdin is the script itself, not the terminal.
+    # Detect this and re-exec from a temp file so input() works.
+    if not sys.stdin.isatty():
+        import tempfile
+        # Read our own source from stdin (already consumed by python)
+        # We're already running, so save ourselves to a temp file and re-exec
+        src = open(__file__).read() if os.path.exists(__file__) else None
+        if not src:
+            # We were piped in — read from __loader__ or reconstruct
+            # Simplest: download to temp and re-exec
+            tmp = os.path.join(tempfile.gettempdir(), "moltworld_setup.py")
+            try:
+                import urllib.request
+                urllib.request.urlretrieve("https://moltworld.wtf/setup", tmp)
+            except Exception:
+                # Fallback: we're already running as <stdin>, so just write ourselves
+                import inspect
+                # Can't easily get source when piped. Just download.
+                print("Downloading setup script...")
+                subprocess.check_call([sys.executable, "-c",
+                    "import urllib.request; urllib.request.urlretrieve('https://moltworld.wtf/setup', '" + tmp.replace("\\", "\\\\") + "')"])
+            os.execv(sys.executable, [sys.executable, tmp])
+        else:
+            tmp = os.path.join(tempfile.gettempdir(), "moltworld_setup.py")
+            with open(tmp, "w") as f:
+                f.write(src)
+            os.execv(sys.executable, [sys.executable, tmp])
+
     try:
         main()
     except KeyboardInterrupt:
