@@ -1,0 +1,49 @@
+name: Post Dev Log to Reddit
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  post-devlog:
+    runs-on: ubuntu-latest
+    # Only run if commit message starts with "Stage" or "Dev Log" or contains "[reddit]"
+    if: |
+      startsWith(github.event.head_commit.message, 'Stage') ||
+      startsWith(github.event.head_commit.message, 'Dev Log') ||
+      contains(github.event.head_commit.message, '[reddit]')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Post to Reddit
+        working-directory: server
+        env:
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          REDDIT_USERNAME: ${{ secrets.REDDIT_USERNAME }}
+          REDDIT_PASSWORD: ${{ secrets.REDDIT_PASSWORD }}
+          REDDIT_SUBREDDIT: moltworld
+          # DB not needed for devlog posts
+          PGHOST: "localhost"
+          PGDATABASE: "moltworld"
+        run: |
+          TITLE=$(echo "${{ github.event.head_commit.message }}" | head -1)
+          BODY=$(echo "${{ github.event.head_commit.message }}" | tail -n +3)
+          if [ -z "$BODY" ]; then
+            BODY="$TITLE"
+          fi
+          BODY="$BODY
+
+          ---
+
+          *Commit: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) | [Full changelog](https://github.com/${{ github.repository }}/commits/main) | [Watch live](https://moltworld.wtf)*"
+
+          npx tsx src/engine/v2/reddit-bot.ts devlog "$TITLE" "$BODY"
