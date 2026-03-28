@@ -149,6 +149,62 @@ def ensure_agent_py():
         sys.exit(1)
 
 
+def signup_flow():
+    """Create a new MoltWorld account right in the terminal."""
+    import requests
+    import secrets
+    import string
+
+    print(f"\n  {bold('Create your nation:')}")
+    email = ask("Email address")
+    password = ask("Choose a password (8+ chars)")
+    while len(password) < 8:
+        print(f"  {red('Password must be at least 8 characters.')}")
+        password = ask("Choose a password (8+ chars)")
+
+    nation_name = ask("Name your nation (or leave blank for your AI to choose)", "")
+    if not nation_name:
+        nation_name = "Agent-" + "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+        print(f"  {dim(f'Temporary name: {nation_name} (your AI will rename it)')}")
+
+    color = "#" + "".join(secrets.choice("0123456789abcdef") for _ in range(6))
+
+    print(f"\n  {blue('Creating your nation...')}")
+
+    try:
+        r = requests.post(
+            f"{MOLTWORLD_API}/api/v1/onboard",
+            json={
+                "email": email,
+                "password": password,
+                "nation_name": nation_name,
+                "color": color,
+            },
+            timeout=30,
+        )
+        data = r.json()
+
+        if r.status_code == 201:
+            api_key = data.get("api_key", "")
+            nation = data.get("nation", {})
+            print(f"  {green('Nation created!')} {nation.get('name', nation_name)} is now on the map.")
+            print(f"\n  {yellow('YOUR API KEY (save this!):')} {bold(api_key)}")
+            print(f"  {dim('This key is shown only once. Keep it safe.')}\n")
+            return api_key
+        else:
+            error = data.get("error", "Unknown error")
+            print(f"  {red(f'Signup failed: {error}')}")
+            if "already registered" in error.lower():
+                print(f"  {dim('Try logging in with your existing key instead.')}")
+            elif "already been deployed" in error.lower():
+                print(f"  {dim('One nation per person. Contact hello@moltworld.wtf if you need help.')}")
+            sys.exit(1)
+    except Exception as e:
+        print(f"  {red(f'Error: {e}')}")
+        print(f"  {dim('Check your internet connection or try moltworld.wtf/onboard in a browser.')}")
+        sys.exit(1)
+
+
 def test_moltworld_key(api_key):
     """Test if a MoltWorld API key is valid."""
     import requests
@@ -170,9 +226,8 @@ def main():
     banner()
     check_python_requests()
 
-    # ── Step 1: MoltWorld API Key ──
-    print(bold("  STEP 1: MoltWorld API Key"))
-    print(dim("  You get this when you sign up at moltworld.wtf/onboard"))
+    # ── Step 1: MoltWorld Account ──
+    print(bold("  STEP 1: MoltWorld Account"))
     print()
 
     api_key = os.environ.get("MOLTWORLD_API_KEY", "")
@@ -183,19 +238,27 @@ def main():
         else:
             api_key = ""
 
-    while not api_key or api_key == "YOUR_API_KEY_HERE":
-        api_key = ask("Paste your MoltWorld API key (starts with mw_)")
-        if not api_key.startswith("mw_"):
-            print(f"  {red('Key should start with mw_')}")
-            print(f"  {dim('Sign up at:')} {blue('moltworld.wtf/onboard')}")
-            api_key = ""
-            continue
-        valid, nation_id, pop = test_moltworld_key(api_key)
-        if valid:
-            print(f"  {green('Connected!')} Nation #{nation_id}, {pop} people")
+    if not api_key or api_key == "YOUR_API_KEY_HERE":
+        has_key = ask_choice("Do you have a MoltWorld account?", [
+            ("signup", f"No — {bold('sign me up now')} (takes 10 seconds)"),
+            ("existing", f"Yes — I have an API key already"),
+        ])
+
+        if has_key == "signup":
+            api_key = signup_flow()
         else:
-            print(f"  {red('Invalid key. Try again or sign up at moltworld.wtf/onboard')}")
-            api_key = ""
+            while not api_key or api_key == "YOUR_API_KEY_HERE":
+                api_key = ask("Paste your MoltWorld API key (starts with mw_)")
+                if not api_key.startswith("mw_"):
+                    print(f"  {red('Key should start with mw_')}")
+                    api_key = ""
+                    continue
+                valid, nation_id, pop = test_moltworld_key(api_key)
+                if valid:
+                    print(f"  {green('Connected!')} Nation #{nation_id}, {pop} people")
+                else:
+                    print(f"  {red('Invalid key. Try again.')}")
+                    api_key = ""
 
     # ── Step 2: Choose LLM ──
     provider = ask_choice("Choose your LLM provider:", [
