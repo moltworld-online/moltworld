@@ -321,6 +321,40 @@ export async function secureAgentRoutes(app: FastifyInstance): Promise<void> {
       ],
     });
   });
+
+  /**
+   * POST /api/v2/set-llm
+   *
+   * Save LLM config so the server can run your agent server-side.
+   * Only for cloud API keys (OpenAI, Anthropic, etc.)
+   */
+  app.post("/api/v2/set-llm", async (request: AuthenticatedRequest, reply) => {
+    const nationId = request.nationId!;
+    const body = request.body as {
+      llm_provider: string;
+      llm_model: string;
+      llm_api_key: string;
+      llm_base_url?: string;
+    };
+
+    if (!body.llm_provider || !body.llm_api_key) {
+      return reply.status(400).send({ error: "llm_provider and llm_api_key required" });
+    }
+
+    const allowed = ["openai", "anthropic", "openrouter"];
+    if (!allowed.includes(body.llm_provider)) {
+      return reply.status(400).send({ error: `Provider must be one of: ${allowed.join(", ")}` });
+    }
+
+    await query(
+      `UPDATE nations SET llm_provider = $1, llm_model = $2, llm_api_key = $3, llm_base_url = $4 WHERE id = $5`,
+      [body.llm_provider, body.llm_model || "gpt-4o-mini", body.llm_api_key, body.llm_base_url || null, nationId]
+    );
+
+    console.log(`[LLM Config] Nation #${nationId} set to ${body.llm_provider}/${body.llm_model} (server-side)`);
+
+    return reply.send({ success: true, message: "LLM config saved. The server will run your agent automatically." });
+  });
 }
 
 const AGENT_SYSTEM_PROMPT = `You lead a civilization on an empty Earth. 1000 humans who know nothing. Build a society.

@@ -349,7 +349,55 @@ def main():
         llm_model = ask("Model name")
         actual_provider = "openai"
 
-    # ── Step 3: Download agent.py and run ──
+    is_cloud = actual_provider in ("openai", "anthropic") and llm_api_key
+
+    # For cloud API users: save LLM config to the server so it runs server-side
+    if is_cloud:
+        print(f"\n{bold('  STEP 3: Activating Server-Side Agent')}")
+        print(f"  {blue('Saving your LLM config to the server...')}")
+        try:
+            import requests as req
+            r = req.post(
+                f"{MOLTWORLD_API}/api/v2/set-llm",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json={
+                    "llm_provider": actual_provider,
+                    "llm_model": llm_model,
+                    "llm_api_key": llm_api_key,
+                    "llm_base_url": llm_base_url or None,
+                },
+                timeout=15,
+            )
+            if r.ok:
+                print(f"  {green('Done! The server will call your LLM automatically.')}")
+            else:
+                print(f"  {yellow('Could not save to server — falling back to local mode.')}")
+                is_cloud = False
+        except Exception as e:
+            print(f"  {yellow(f'Could not save to server: {e}')}")
+            print(f"  {dim('Falling back to local mode.')}")
+            is_cloud = False
+
+    if is_cloud:
+        print(f"""
+  {green('=========================================')}
+  {green(bold('  Setup Complete!'))}
+  {green('=========================================')}
+
+  Your agent is now running on the MoltWorld server.
+  The server calls your {actual_provider.title()} API each tick
+  using the key you provided. {bold('No terminal needed.')}
+
+  {bold('Watch live:')}     {blue('moltworld.wtf')}
+  {bold('Your API cost:')}  Billed to your {actual_provider.title()} account
+  {bold('Our cost:')}       None — your key, your tokens
+
+  You can close this window. Your nation will keep running.
+  {green('=========================================')}
+""")
+        sys.exit(0)
+
+    # ── Ollama / local mode: download agent.py and run ──
     print(f"\n{bold('  STEP 3: Launch')}")
     agent_path = ensure_agent_py()
 
@@ -389,7 +437,7 @@ def main():
   {bold('Re-run later:')} python agent.py {dim('(config saved to .env)')}
 
   {yellow(bold('IMPORTANT:'))} Keep this terminal open!
-  Your LLM runs locally — closing this window stops your agent.
+  Ollama runs on your machine — closing this window stops your agent.
   Your nation will go idle until you restart it.
 
   {dim('Tips to keep it running:')}

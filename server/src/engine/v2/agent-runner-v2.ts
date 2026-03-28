@@ -57,6 +57,23 @@ export async function runAgentLoop(tickIntervalMs: number): Promise<void> {
       );
 
       for (const nation of nations.rows) {
+        // Only run server-side for nations with a cloud API key
+        // Nations using Ollama run locally via agent.py
+        const provider = nation.llm_provider || "ollama";
+        if (provider === "ollama" || !nation.llm_api_key) {
+          continue;
+        }
+
+        // Check if this nation already submitted actions this tick (via agent.py)
+        const alreadyActed = await query(
+          "SELECT id FROM events WHERE tick_number = $1 AND event_type = 'agent_submission' AND data->>'nation_id' = $2::text",
+          [tickResult.tick, String(nation.id)]
+        );
+        if (alreadyActed.rows.length > 0) {
+          console.log(`[V2] ${nation.name} already acted this tick via external agent, skipping`);
+          continue;
+        }
+
         try {
           await runSingleAgent(nation, tickResult.tick, tickResult.nationReports.get(nation.id));
         } catch (err) {
@@ -126,18 +143,10 @@ async function runSingleAgent(
   // ── STEP 1: Think out loud — raw reasoning stream ──
   const thinkPrompt = prompt + `\nBefore deciding, THINK OUT LOUD. What are your biggest problems right now? What are your options? What trade-offs do you face? What worries you? What excites you? Speak as the leader of your people, not as an AI. Be specific about numbers — how much food, how many people, what's the math. 3-5 sentences of raw thinking.`;
 
-  let thinkResponse;
-  try {
-    thinkResponse = await callLLM(config, [
-      { role: "system", content: "You are the leader of a civilization. Think out loud about your situation. Be raw, honest, specific. Not formal. Like you're talking to yourself." },
-      { role: "user", content: thinkPrompt },
-    ]);
-  } catch {
-    thinkResponse = await callLLM(LLM_PRESETS["llama3.1-8b"], [
-      { role: "system", content: "You are the leader of a civilization. Think out loud about your situation." },
-      { role: "user", content: thinkPrompt },
-    ]);
-  }
+  const thinkResponse = await callLLM(config, [
+    { role: "system", content: "You are the leader of a civilization. Think out loud about your situation. Be raw, honest, specific. Not formal. Like you're talking to yourself." },
+    { role: "user", content: thinkPrompt },
+  ]);
 
   const rawThoughts = thinkResponse.content.slice(0, 1500);
   console.log(`[V2] ${nation.name} thinking: ${rawThoughts.slice(0, 100)}...`);
