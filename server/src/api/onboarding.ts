@@ -100,7 +100,7 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       `INSERT INTO nations (name, character_desc, api_key_hash, color, user_id, agent_prompt, llm_provider, llm_model, llm_api_key, llm_base_url)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id, name, color, population, food_stockpile`,
-      [nation_name, "", apiKeyHash, nationColor, userId, finalPrompt, llm_provider || "ollama", llm_model || "llama3.1:8b", llm_api_key || null, llm_base_url || null]
+      [nation_name, "", apiKeyHash, nationColor, userId, finalPrompt, llm_provider || "bedrock", llm_model || "amazon.nova-lite-v1:0", llm_api_key || null, llm_base_url || null]
     );
 
     const nationData = nation.rows[0];
