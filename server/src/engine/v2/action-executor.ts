@@ -286,6 +286,96 @@ export async function executeSingleActionSecure(
       break;
     }
 
+    case "PROPOSE_TRADE": {
+      const targetId = (action as any).target_nation;
+      const offer = (action as any).offer as Array<{ type: string; species_id?: string; amount: number }>;
+      const request = (action as any).request as Array<{ type: string; species_id?: string; amount: number }>;
+
+      if (!targetId) throw new Error("target_nation required");
+      if (!offer || !Array.isArray(offer) || offer.length === 0) throw new Error("offer array required");
+      if (!request || !Array.isArray(request) || request.length === 0) throw new Error("request array required");
+
+      // Validate target exists and is alive
+      const target = await query("SELECT id, name, alive FROM nations WHERE id = $1", [targetId]);
+      if (target.rows.length === 0) throw new Error(`Nation #${targetId} does not exist`);
+      if (!target.rows[0].alive) throw new Error(`Nation #${targetId} has collapsed`);
+
+      // Validate offer items (check sender has what they're offering)
+      for (const item of offer) {
+        if (item.type === "food_kcal") {
+          const food = await query("SELECT food_kcal FROM nations WHERE id = $1", [nationId]);
+          if ((food.rows[0]?.food_kcal || 0) < item.amount) throw new Error(`Not enough food. Have ${food.rows[0]?.food_kcal}, offering ${item.amount}`);
+        } else if (item.type === "seeds") {
+          if (!item.species_id) throw new Error("species_id required for seeds");
+          const hasCrop = await query("SELECT id FROM national_crops WHERE nation_id = $1 AND species_id = $2", [nationId, item.species_id]);
+          const hasWild = await query(`SELECT COUNT(*) as c FROM mesh_cells WHERE owner_id = $1 AND wild_species @> $2::jsonb`, [nationId, JSON.stringify([{ id: item.species_id }])]);
+          if (hasCrop.rows.length === 0 && parseInt(hasWild.rows[0].c) === 0) throw new Error(`You don't have ${item.species_id} to trade`);
+        } else if (item.type === "livestock") {
+          if (!item.species_id) throw new Error("species_id required for livestock");
+          const herd = await query("SELECT herd_size FROM national_herds WHERE nation_id = $1 AND species_id = $2", [nationId, item.species_id]);
+          if (herd.rows.length === 0 || herd.rows[0].herd_size < item.amount) throw new Error(`Not enough ${item.species_id}. Have ${herd.rows[0]?.herd_size || 0}, offering ${item.amount}`);
+        }
+      }
+
+      // Create trade offer
+      await query(
+        `INSERT INTO trade_offers (from_nation_id, to_nation_id, offer, request, tick_proposed, status)
+         VALUES ($1, $2, $3, $4, $5, 'pending')`,
+        [nationId, targetId, JSON.stringify(offer), JSON.stringify(request), tick]
+      );
+
+      const offerStr = offer.map(i => `${i.amount} ${i.species_id || i.type}`).join(", ");
+      const requestStr = request.map(i => `${i.amount} ${i.species_id || i.type}`).join(", ");
+      await query(
+        "INSERT INTO forum_posts (nation_id, content, tick_number, post_type) VALUES ($1, $2, $3, 'treaty_proposal')",
+        [nationId, `Trade proposal to ${target.rows[0].name}: offering ${offerStr} for ${requestStr}`, tick]
+      );
+      break;
+    }
+
+    case "ACCEPT_TRADE": {
+      const tradeId = (action as any).trade_id;
+      if (!tradeId) throw new Error("trade_id required");
+
+      // Get the trade offer
+      const trade = await query(
+        "SELECT * FROM trade_offers WHERE id = $1 AND to_nation_id = $2 AND status = 'pending'",
+        [tradeId, nationId]
+      );
+      if (trade.rows.length === 0) throw new Error(`Trade #${tradeId} not found or not pending for your nation`);
+
+      const t = trade.rows[0];
+      const offer = t.offer as Array<{ type: string; species_id?: string; amount: number }>;
+      const request = t.request as Array<{ type: string; species_id?: string; amount: number }>;
+
+      // Execute the trade: transfer from offerer to accepter, and request from accepter to offerer
+      // Transfer offer items (from_nation → to_nation)
+      for (const item of offer) {
+        await executeTradeTransfer(t.from_nation_id, nationId, item, tick);
+      }
+      // Transfer request items (to_nation → from_nation)
+      for (const item of request) {
+        await executeTradeTransfer(nationId, t.from_nation_id, item, tick);
+      }
+
+      // Mark trade as completed
+      await query("UPDATE trade_offers SET status = 'accepted' WHERE id = $1", [tradeId]);
+
+      // Improve relations
+      const { modifyRelations } = await import("./trade.js");
+      const { transaction } = await import("../../db/pool.js");
+      await transaction(async (client) => {
+        await modifyRelations(client, nationId, t.from_nation_id, 10);
+      });
+
+      const fromNation = await query("SELECT name FROM nations WHERE id = $1", [t.from_nation_id]);
+      await query(
+        "INSERT INTO forum_posts (nation_id, content, tick_number, post_type) VALUES ($1, $2, $3, 'news')",
+        [nationId, `Trade accepted with ${fromNation.rows[0]?.name || 'unknown'}! Relations improved.`, tick]
+      );
+      break;
+    }
+
     case "FORUM_POST": {
       const content = ((action as any).content || "").trim();
       if (content.length > 5) {
@@ -301,5 +391,60 @@ export async function executeSingleActionSecure(
       const actionType = (action as any).type || "unknown";
       throw new Error(`Unknown or unavailable action: ${actionType}`);
     }
+  }
+}
+
+async function executeTradeTransfer(
+  fromNation: number,
+  toNation: number,
+  item: { type: string; species_id?: string; amount: number },
+  tick: number,
+): Promise<void> {
+  switch (item.type) {
+    case "food_kcal":
+      await query("UPDATE nations SET food_kcal = food_kcal - $1 WHERE id = $2", [item.amount, fromNation]);
+      await query("UPDATE nations SET food_kcal = food_kcal + $1 WHERE id = $2", [item.amount, toNation]);
+      break;
+
+    case "wood":
+      await query("UPDATE nations SET wood = GREATEST(0, wood - $1) WHERE id = $2", [item.amount, fromNation]);
+      await query("UPDATE nations SET wood = wood + $1 WHERE id = $2", [item.amount, toNation]);
+      break;
+
+    case "stone":
+      await query("UPDATE nations SET stone = GREATEST(0, stone - $1) WHERE id = $2", [item.amount, fromNation]);
+      await query("UPDATE nations SET stone = stone + $1 WHERE id = $2", [item.amount, toNation]);
+      break;
+
+    case "seeds":
+      // Grant the receiving nation the ability to farm this crop
+      // (adds to national_crops with 0 tiles — they can then PLANT_CROP)
+      if (item.species_id) {
+        await query(
+          `INSERT INTO national_crops (nation_id, species_id, tiles_planted, first_planted_tick)
+           VALUES ($1, $2, 0, $3)
+           ON CONFLICT (nation_id, species_id) DO NOTHING`,
+          [toNation, item.species_id, tick]
+        );
+      }
+      break;
+
+    case "livestock":
+      // Transfer animals from one herd to another
+      if (item.species_id) {
+        // Deduct from sender
+        await query(
+          "UPDATE national_herds SET herd_size = GREATEST(0, herd_size - $1) WHERE nation_id = $2 AND species_id = $3",
+          [item.amount, fromNation, item.species_id]
+        );
+        // Add to receiver (create herd if needed)
+        await query(
+          `INSERT INTO national_herds (nation_id, species_id, herd_size, domesticated_tick)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (nation_id, species_id) DO UPDATE SET herd_size = national_herds.herd_size + $3`,
+          [toNation, item.species_id, item.amount, tick]
+        );
+      }
+      break;
   }
 }

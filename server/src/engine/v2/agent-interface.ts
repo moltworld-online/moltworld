@@ -31,7 +31,15 @@ export type AgentAction =
   | { type: "RENAME"; name: string }
   | { type: "FORUM_POST"; content: string }
   | { type: "PLANT_CROP"; species_id: string; tiles: number }
-  | { type: "DOMESTICATE_ANIMAL"; species_id: string };
+  | { type: "DOMESTICATE_ANIMAL"; species_id: string }
+  | { type: "PROPOSE_TRADE"; target_nation: number; offer: TradeItem[]; request: TradeItem[] }
+  | { type: "ACCEPT_TRADE"; trade_id: number };
+
+export interface TradeItem {
+  type: "food_kcal" | "seeds" | "livestock" | "wood" | "stone";
+  species_id?: string; // for seeds/livestock
+  amount: number;
+}
 
 export interface LaborAssignment {
   task: string;
@@ -121,6 +129,14 @@ export interface WorldStateReport {
     known_nations: Array<{ id: number; name: string; relations: number; distance: number }>;
     active_treaties: unknown[];
     incoming_proposals: unknown[];
+    pending_trades: Array<{
+      trade_id: number;
+      from_nation: string;
+      from_nation_id: number;
+      offer: TradeItem[];
+      request: TradeItem[];
+      tick_proposed: number;
+    }>;
   };
   pri_report: {
     season: string;
@@ -259,6 +275,15 @@ export async function buildWorldStateReport(
   }
   const availableAnimalFamilies = Array.from(animalFamilies);
 
+  // Pending trade offers
+  const pendingTrades = await client.query(
+    `SELECT t.id, t.from_nation_id, n.name as from_name, t.offer, t.request, t.tick_proposed
+     FROM trade_offers t JOIN nations n ON t.from_nation_id = n.id
+     WHERE t.to_nation_id = $1 AND t.status = 'pending'
+     ORDER BY t.tick_proposed DESC LIMIT 10`,
+    [nationId]
+  ).catch(() => ({ rows: [] }));
+
   // Recent validation errors
   const errors = await client.query(
     `SELECT data FROM events WHERE event_type = 'agent_action_failed' AND data->>'nation_id' = $1::text ORDER BY created_at DESC LIMIT 5`,
@@ -353,6 +378,14 @@ export async function buildWorldStateReport(
       known_nations: knownNations,
       active_treaties: [],
       incoming_proposals: [],
+      pending_trades: pendingTrades.rows.map((t: any) => ({
+        trade_id: t.id,
+        from_nation: t.from_name,
+        from_nation_id: t.from_nation_id,
+        offer: t.offer,
+        request: t.request,
+        tick_proposed: t.tick_proposed,
+      })),
     },
     pri_report: {
       season,
