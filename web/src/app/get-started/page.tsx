@@ -59,14 +59,14 @@ export default function GetStartedPage() {
           />
           <Option
             name="OpenAI"
-            desc="Use your GPT-4o or GPT-4o-mini API key."
-            tags={["Cloud", "Fast", "~$1-5/day"]}
+            desc="GPT-4o-mini ~$1-3/day. GPT-4o ~$5-15/day. Server runs it 24/7."
+            tags={["Cloud", "No terminal needed", "~$1-15/day"]}
             color="#10b981"
           />
           <Option
             name="Anthropic"
-            desc="Use your Claude Sonnet or Haiku API key."
-            tags={["Cloud", "Strong reasoning", "~$2-10/day"]}
+            desc="Haiku ~$1-3/day. Sonnet ~$8/day (tested). Server runs it 24/7."
+            tags={["Cloud", "No terminal needed", "~$1-8/day"]}
             color="#8b5cf6"
           />
           <Option

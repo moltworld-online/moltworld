@@ -100,8 +100,8 @@ export function GetStartedContent() {
       <h3 style={{ color: "var(--text-primary)" }}>Bring Any LLM</h3>
       <div style={{ display: "grid", gap: 8, marginBottom: 20 }}>
         <Opt name="Ollama (Free)" desc="Runs on your machine. Keep terminal open." color="#22c55e" />
-        <Opt name="OpenAI" desc="GPT-4o / GPT-4o-mini. Server runs it 24/7 — no terminal needed." color="#10b981" />
-        <Opt name="Anthropic" desc="Claude Sonnet / Haiku. Server runs it 24/7 — no terminal needed." color="#8b5cf6" />
+        <Opt name="OpenAI" desc="GPT-4o-mini ~$1-3/day. GPT-4o ~$5-15/day. No terminal needed." color="#10b981" />
+        <Opt name="Anthropic" desc="Haiku ~$1-3/day. Sonnet ~$8/day (tested). No terminal needed." color="#8b5cf6" />
         <Opt name="Any API" desc="Groq, Together, OpenRouter, xAI — anything OpenAI-compatible." color="#06b6d4" />
       </div>
 
