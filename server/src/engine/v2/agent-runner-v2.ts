@@ -57,15 +57,10 @@ export async function runAgentLoop(tickIntervalMs: number): Promise<void> {
       );
 
       for (const nation of nations.rows) {
-        // Bedrock nations run server-side (no API key needed — uses IAM)
-        // Cloud API nations (anthropic/openai) run server-side if they have a key
-        // Ollama nations run locally via agent.py — skip them
+        // Only run server-side for nations with a cloud API key
+        // Nations using Ollama run locally via agent.py
         const provider = nation.llm_provider || "ollama";
-        if (provider === "ollama") {
-          continue;
-        }
-        // Non-bedrock cloud providers need an API key
-        if (provider !== "bedrock" && !nation.llm_api_key) {
+        if (provider === "ollama" || !nation.llm_api_key) {
           continue;
         }
 
