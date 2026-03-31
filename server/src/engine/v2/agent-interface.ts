@@ -277,9 +277,9 @@ export async function buildWorldStateReport(
 
   // Pending trade offers
   const pendingTrades = await client.query(
-    `SELECT t.id, t.from_nation_id, n.name as from_name, t.offer, t.request, t.tick_proposed
-     FROM trade_offers t JOIN nations n ON t.from_nation_id = n.id
-     WHERE t.to_nation_id = $1 AND t.status = 'pending'
+    `SELECT t.id, t.proposer_id as from_nation_id, n.name as from_name, t.offer, t.request, t.tick_proposed
+     FROM trade_offers t JOIN nations n ON t.proposer_id = n.id
+     WHERE t.target_id = $1 AND t.status = 'pending'
      ORDER BY t.tick_proposed DESC LIMIT 10`,
     [nationId]
   ).catch(() => ({ rows: [] }));

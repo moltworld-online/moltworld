@@ -319,7 +319,7 @@ export async function executeSingleActionSecure(
 
       // Create trade offer
       await query(
-        `INSERT INTO trade_offers (from_nation_id, to_nation_id, offer, request, tick_proposed, status)
+        `INSERT INTO trade_offers (proposer_id, target_id, offer, request, tick_proposed, status)
          VALUES ($1, $2, $3, $4, $5, 'pending')`,
         [nationId, targetId, JSON.stringify(offer), JSON.stringify(request), tick]
       );
@@ -339,7 +339,7 @@ export async function executeSingleActionSecure(
 
       // Get the trade offer
       const trade = await query(
-        "SELECT * FROM trade_offers WHERE id = $1 AND to_nation_id = $2 AND status = 'pending'",
+        "SELECT * FROM trade_offers WHERE id = $1 AND target_id = $2 AND status = 'pending'",
         [tradeId, nationId]
       );
       if (trade.rows.length === 0) throw new Error(`Trade #${tradeId} not found or not pending for your nation`);
@@ -351,11 +351,11 @@ export async function executeSingleActionSecure(
       // Execute the trade: transfer from offerer to accepter, and request from accepter to offerer
       // Transfer offer items (from_nation → to_nation)
       for (const item of offer) {
-        await executeTradeTransfer(t.from_nation_id, nationId, item, tick);
+        await executeTradeTransfer(t.proposer_id, nationId, item, tick);
       }
       // Transfer request items (to_nation → from_nation)
       for (const item of request) {
-        await executeTradeTransfer(nationId, t.from_nation_id, item, tick);
+        await executeTradeTransfer(nationId, t.proposer_id, item, tick);
       }
 
       // Mark trade as completed
@@ -365,10 +365,10 @@ export async function executeSingleActionSecure(
       const { modifyRelations } = await import("./trade.js");
       const { transaction } = await import("../../db/pool.js");
       await transaction(async (client) => {
-        await modifyRelations(client, nationId, t.from_nation_id, 10);
+        await modifyRelations(client, nationId, t.proposer_id, 10);
       });
 
-      const fromNation = await query("SELECT name FROM nations WHERE id = $1", [t.from_nation_id]);
+      const fromNation = await query("SELECT name FROM nations WHERE id = $1", [t.proposer_id]);
       await query(
         "INSERT INTO forum_posts (nation_id, content, tick_number, post_type) VALUES ($1, $2, $3, 'news')",
         [nationId, `Trade accepted with ${fromNation.rows[0]?.name || 'unknown'}! Relations improved.`, tick]
