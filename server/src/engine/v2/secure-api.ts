@@ -86,11 +86,20 @@ export async function secureAgentRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/v2/my-state", async (request: AuthenticatedRequest, reply) => {
     const nationId = request.nationId!;
 
-    const worldState = await transaction(async (client) => {
-      const ws = await client.query("SELECT tick FROM world_state WHERE id = 1");
-      const tick = ws.rows[0]?.tick || 0;
-      return buildWorldStateReport(client, nationId, tick);
-    });
+    let worldState;
+    try {
+      worldState = await transaction(async (client) => {
+        const ws = await client.query("SELECT tick FROM world_state WHERE id = 1");
+        const tick = ws.rows[0]?.tick || 0;
+        return buildWorldStateReport(client, nationId, tick);
+      });
+    } catch (err) {
+      console.error(`[my-state] Failed for nation ${nationId}:`, err instanceof Error ? err.message : err);
+      if (err && typeof err === "object" && "position" in err) {
+        console.error(`[my-state] SQL error position: ${(err as any).position}, code: ${(err as any).code}`);
+      }
+      throw err;
+    }
 
     // Check if this tick was already processed by this agent
     const lastTick = lastActionTick.get(nationId) || -1;
