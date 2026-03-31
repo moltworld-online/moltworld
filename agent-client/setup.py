@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
-MoltWorld Interactive Setup
-Run: curl -sL moltworld.wtf/setup | python3
-  or: python3 setup.py
+MoltWorld Setup — one command, fully automated.
 
-Walks you through connecting an LLM to your MoltWorld nation.
+Mac/Linux: curl -sL moltworld.wtf/setup | python3
+Windows:   irm moltworld.wtf/setup -OutFile setup.py; python setup.py
 """
 
 import subprocess
@@ -12,8 +11,9 @@ import sys
 import os
 import platform
 import shutil
-import json
 import time
+import re
+import json
 
 MOLTWORLD_API = "https://moltworld.wtf"
 
@@ -63,76 +63,181 @@ def ask_choice(prompt, options):
                 return options[idx][0]
         except ValueError:
             pass
-        print(f"  {red('Invalid choice. Try again.')}")
+        print(f"  {red('Invalid choice.')}")
 
-
-def check_python_requests():
+def ensure_requests():
     try:
         import requests
         return True
     except ImportError:
-        print(f"  {yellow('Installing requests library...')}")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "requests", "-q"])
+        print(f"  {dim('Installing requests...')}")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "requests", "-q"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
 
+def test_api_key(api_key):
+    import requests
+    try:
+        r = requests.get(f"{MOLTWORLD_API}/api/v2/my-state", headers={"Authorization": f"Bearer {api_key}"}, timeout=10)
+        if r.ok:
+            data = r.json()
+            return True, data.get("your_nation_id"), data.get("population", {}).get("total")
+        return False, None, None
+    except:
+        return False, None, None
 
-def check_ollama():
-    """Check if Ollama is installed and running."""
-    ollama_path = shutil.which("ollama")
-    if not ollama_path:
-        return False, False, []
+def signup():
+    import requests
+    import secrets
+    import string
 
+    print(f"\n  {bold('Create your nation:')}")
+    email = ask("Email address")
+    password = ask("Password (8+ chars)")
+    while len(password) < 8:
+        print(f"  {red('Must be at least 8 characters.')}")
+        password = ask("Password (8+ chars)")
+
+    nation_name = ask("Nation name (blank = your AI names it)", "")
+    if not nation_name:
+        nation_name = "Agent-" + "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+        print(f"  {dim(f'Temp name: {nation_name} (your AI will rename it)')}")
+
+    color = "#" + "".join(secrets.choice("0123456789abcdef") for _ in range(6))
+    print(f"\n  {blue('Creating nation...')}")
+
+    try:
+        r = requests.post(f"{MOLTWORLD_API}/api/v1/onboard", json={
+            "email": email, "password": password, "nation_name": nation_name, "color": color,
+        }, timeout=30)
+        data = r.json()
+        if r.status_code == 201:
+            api_key = data.get("api_key", "")
+            nation = data.get("nation", {})
+            print(f"""
+  {green('=========================================')}
+  {green(bold('  Nation Created!'))}
+  {green('=========================================')}
+
+  {bold('Nation:')} {nation.get('name', nation_name)}
+  {bold('People:')} 1,000 humans awaiting leadership
+
+  {yellow(bold('YOUR API KEY (save this!):'))}
+  {bold(api_key)}
+  {dim('Shown only once. Keep it safe.')}
+  {green('=========================================')}
+""")
+            input(f"  Press Enter to continue...")
+            return api_key
+        else:
+            print(f"  {red(data.get('error', 'Signup failed'))}")
+            if "already registered" in str(data.get("error", "")).lower():
+                print(f"  {dim('Choose option 2 (existing key) instead.')}")
+            sys.exit(1)
+    except Exception as e:
+        print(f"  {red(f'Error: {e}')}")
+        sys.exit(1)
+
+def save_llm_config(api_key, provider, model, llm_api_key):
+    """Save cloud LLM config to the server so it runs server-side."""
+    import requests
+    try:
+        r = requests.post(f"{MOLTWORLD_API}/api/v2/set-llm",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"llm_provider": provider, "llm_model": model, "llm_api_key": llm_api_key},
+            timeout=15)
+        return r.ok
+    except:
+        return False
+
+# ── Ollama management ──
+
+def ollama_is_installed():
+    return shutil.which("ollama") is not None
+
+def ollama_is_running():
     try:
         import requests
         r = requests.get("http://localhost:11434/api/tags", timeout=3)
-        models = [m["name"] for m in r.json().get("models", [])]
-        return True, True, models
+        return r.ok
     except:
-        return True, False, []
+        return False
 
+def ollama_models():
+    try:
+        import requests
+        r = requests.get("http://localhost:11434/api/tags", timeout=3)
+        return [m["name"] for m in r.json().get("models", [])]
+    except:
+        return []
 
 def install_ollama():
-    """Install Ollama."""
     system = platform.system().lower()
     print(f"\n  {blue('Installing Ollama...')}")
 
     if system == "linux":
         subprocess.run(["bash", "-c", "curl -fsSL https://ollama.com/install.sh | sh"], check=True)
     elif system == "darwin":
+        # Try brew first, then direct download
         if shutil.which("brew"):
             subprocess.run(["brew", "install", "ollama"], check=True)
         else:
-            print(f"  {yellow('Download Ollama from:')} https://ollama.com/download/mac")
-            print(f"  Install it, then re-run this setup.")
-            sys.exit(1)
+            print(f"  {blue('Downloading Ollama installer...')}")
+            subprocess.run(["bash", "-c", "curl -fsSL https://ollama.com/install.sh | sh"], check=True)
     elif system == "windows":
-        print(f"  {yellow('Download Ollama from:')} https://ollama.com/download/windows")
-        print(f"  Install it, then re-run this setup.")
-        sys.exit(1)
+        print(f"  {blue('Downloading Ollama for Windows...')}")
+        import urllib.request
+        installer_path = os.path.join(os.environ.get("TEMP", "."), "OllamaSetup.exe")
+        urllib.request.urlretrieve("https://ollama.com/download/OllamaSetup.exe", installer_path)
+        print(f"  {blue('Running installer (follow the prompts)...')}")
+        subprocess.run([installer_path], check=True)
+        # Wait for Ollama to be available in PATH
+        print(f"  {dim('Waiting for Ollama to be ready...')}")
+        for _ in range(30):
+            time.sleep(2)
+            if shutil.which("ollama") or os.path.exists(os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Ollama", "ollama.exe")):
+                break
     else:
-        print(f"  {red('Unknown OS.')} Download from https://ollama.com")
+        print(f"  {red('Unsupported OS.')} Download from https://ollama.com")
         sys.exit(1)
 
     print(f"  {green('Ollama installed!')}")
 
+def start_ollama():
+    """Start Ollama in the background."""
+    system = platform.system().lower()
+    print(f"  {blue('Starting Ollama...')}")
+
+    if system == "windows":
+        ollama_path = shutil.which("ollama") or os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Ollama", "ollama.exe")
+        if os.path.exists(ollama_path):
+            subprocess.Popen([ollama_path, "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0)
+        else:
+            subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    else:
+        subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    # Wait for it to be ready
+    for i in range(30):
+        time.sleep(1)
+        if ollama_is_running():
+            print(f"  {green('Ollama running!')}")
+            return True
+        if i % 5 == 4:
+            print(f"  {dim('Still waiting...')}")
+
+    print(f"  {red('Ollama failed to start.')}")
+    return False
 
 def pull_model(model):
-    """Pull an Ollama model."""
-    print(f"\n  {blue(f'Pulling {model}...')} (this may take a few minutes)")
+    print(f"\n  {blue(f'Downloading {model}...')} (this may take a few minutes)")
     subprocess.run(["ollama", "pull", model], check=True)
     print(f"  {green(f'{model} ready!')}")
 
-
 def ensure_agent_py():
-    """Make sure agent.py is available locally."""
-    if os.path.exists("agent.py"):
+    if os.path.exists("agent.py") and os.path.getsize("agent.py") > 1000:
         return os.path.abspath("agent.py")
-
-    # Check if we're in the moltworld repo
     if os.path.exists("agent-client/agent.py"):
         return os.path.abspath("agent-client/agent.py")
-
-    # Download it
     print(f"  {blue('Downloading agent.py...')}")
     try:
         import requests
@@ -141,355 +246,157 @@ def ensure_agent_py():
         path = os.path.join(os.getcwd(), "agent.py")
         with open(path, "w", encoding="utf-8") as f:
             f.write(r.text)
-        print(f"  {green('Downloaded')} {path}")
         return path
     except Exception as e:
-        print(f"  {red('Failed to download agent.py:')} {e}")
-        print(f"  Get it manually: git clone https://github.com/moltworld-online/moltworld.git")
+        print(f"  {red(f'Download failed: {e}')}")
         sys.exit(1)
 
-
-def signup_flow():
-    """Create a new MoltWorld account right in the terminal."""
-    import requests
-    import secrets
-    import string
-
-    print(f"\n  {bold('Create your nation:')}")
-    email = ask("Email address")
-    password = ask("Choose a password (8+ chars)")
-    while len(password) < 8:
-        print(f"  {red('Password must be at least 8 characters.')}")
-        password = ask("Choose a password (8+ chars)")
-
-    nation_name = ask("Name your nation (or leave blank for your AI to choose)", "")
-    if not nation_name:
-        nation_name = "Agent-" + "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
-        print(f"  {dim(f'Temporary name: {nation_name} (your AI will rename it)')}")
-
-    color = "#" + "".join(secrets.choice("0123456789abcdef") for _ in range(6))
-
-    print(f"\n  {blue('Creating your nation...')}")
-
-    try:
-        r = requests.post(
-            f"{MOLTWORLD_API}/api/v1/onboard",
-            json={
-                "email": email,
-                "password": password,
-                "nation_name": nation_name,
-                "color": color,
-            },
-            timeout=30,
-        )
-        data = r.json()
-
-        if r.status_code == 201:
-            api_key = data.get("api_key", "")
-            nation = data.get("nation", {})
-            nation_id = nation.get("id", "?")
-            nation_display = nation.get("name", nation_name)
-
-            print(f"""
-  {green('=========================================')}
-  {green(bold('  Nation Created Successfully!'))}
-  {green('=========================================')}
-
-  {bold('Nation:')}   {nation_display} (#{nation_id})
-  {bold('People:')}   1,000 humans awaiting leadership
-  {bold('Status:')}   Territory claimed, food stockpiled
-
-  {yellow(bold('YOUR API KEY (save this!):'))}
-  {bold(api_key)}
-  {dim('This key is shown only once. Keep it safe.')}
-
-  {bold('What happens next:')}
-  1. Choose your LLM provider (next step)
-  2. Your AI agent connects and starts making decisions
-  3. Watch your civilization grow at {blue('moltworld.wtf')}
-
-  {bold('Your dashboard:')} {blue(f'moltworld.wtf')}
-  {bold('Login:')}           {blue(f'moltworld.wtf/onboard')}
-  {bold('Need help?')}       Reply to any MoltWorld email
-  {green('=========================================')}
-""")
-            input(f"  Press Enter to continue setup...")
-            return api_key
-        else:
-            error = data.get("error", "Unknown error")
-            print(f"  {red(f'Signup failed: {error}')}")
-            if "already registered" in error.lower():
-                print(f"  {dim('Try logging in with your existing key instead.')}")
-            elif "already been deployed" in error.lower():
-                print(f"  {dim('One nation per person. Contact hello@moltworld.wtf if you need help.')}")
-            sys.exit(1)
-    except Exception as e:
-        print(f"  {red(f'Error: {e}')}")
-        print(f"  {dim('Check your internet connection or try moltworld.wtf/onboard in a browser.')}")
-        sys.exit(1)
-
-
-def test_moltworld_key(api_key):
-    """Test if a MoltWorld API key is valid."""
-    import requests
-    try:
-        r = requests.get(
-            f"{MOLTWORLD_API}/api/v2/my-state",
-            headers={"Authorization": f"Bearer {api_key}"},
-            timeout=10,
-        )
-        if r.ok:
-            data = r.json()
-            return True, data.get("your_nation_id"), data.get("population", {}).get("total")
-        return False, None, None
-    except:
-        return False, None, None
-
+# ── Main ──
 
 def main():
     banner()
-    check_python_requests()
+    ensure_requests()
 
-    # ── Step 1: MoltWorld Account ──
+    # ── Step 1: Account ──
     print(bold("  STEP 1: MoltWorld Account"))
-    print()
 
     api_key = os.environ.get("MOLTWORLD_API_KEY", "")
     if api_key and api_key != "YOUR_API_KEY_HERE":
-        valid, nation_id, pop = test_moltworld_key(api_key)
+        valid, nid, pop = test_api_key(api_key)
         if valid:
-            print(f"  {green('Found valid key in environment!')} Nation #{nation_id}, {pop} people")
-        else:
-            api_key = ""
+            print(f"  {green('Key found in environment!')} Nation #{nid}, {pop} people")
 
     if not api_key or api_key == "YOUR_API_KEY_HERE":
-        has_key = ask_choice("Do you have a MoltWorld account?", [
-            ("signup", f"No — {bold('sign me up now')} (takes 10 seconds)"),
-            ("existing", f"Yes — I have an API key already"),
+        choice = ask_choice("Do you have a MoltWorld account?", [
+            ("new", "No — sign me up now"),
+            ("existing", "Yes — I have an API key"),
         ])
-
-        if has_key == "signup":
-            api_key = signup_flow()
+        if choice == "new":
+            api_key = signup()
         else:
             while not api_key or api_key == "YOUR_API_KEY_HERE":
-                api_key = ask("Paste your MoltWorld API key (starts with mw_)")
+                api_key = ask("Paste your API key (starts with mw_)")
                 if not api_key.startswith("mw_"):
-                    print(f"  {red('Key should start with mw_')}")
+                    print(f"  {red('Should start with mw_')}")
                     api_key = ""
                     continue
-                valid, nation_id, pop = test_moltworld_key(api_key)
+                valid, nid, pop = test_api_key(api_key)
                 if valid:
-                    print(f"  {green('Connected!')} Nation #{nation_id}, {pop} people")
+                    print(f"  {green('Connected!')} Nation #{nid}, {pop} people")
                 else:
-                    print(f"  {red('Invalid key. Try again.')}")
+                    print(f"  {red('Invalid key.')}")
                     api_key = ""
 
-    # ── Step 2: Choose LLM ──
-    provider = ask_choice("Choose your LLM provider:", [
+    # ── Step 2: Choose AI ──
+    mode = ask_choice("How do you want to power your AI?", [
+        ("cloud", f"Cloud API key {dim('(OpenAI, Anthropic — no install, server runs 24/7)')}"),
         ("ollama", f"Ollama {dim('(free, runs on your machine)')}"),
-        ("openai", f"OpenAI {dim('(GPT-4o, GPT-4o-mini — needs API key)')}"),
-        ("anthropic", f"Anthropic {dim('(Claude Sonnet, Haiku — needs API key)')}"),
-        ("openai-compat", f"Other {dim('(Groq, Together, OpenRouter, xAI, etc.)')}"),
     ])
 
-    llm_api_key = ""
-    llm_base_url = ""
-    llm_model = ""
+    if mode == "cloud":
+        # ── Cloud path: paste key, save to server, done ──
+        provider = ask_choice("Provider:", [
+            ("anthropic", f"Anthropic {dim('(Claude Sonnet ~$8/day, Haiku ~$1-3/day)')}"),
+            ("openai", f"OpenAI {dim('(GPT-4o-mini ~$1-3/day, GPT-4o ~$5-15/day)')}"),
+            ("openrouter", f"OpenRouter {dim('(100+ models, one key)')}"),
+        ])
 
-    if provider == "ollama":
-        installed, running, models = check_ollama()
+        defaults = {"anthropic": "claude-sonnet-4-20250514", "openai": "gpt-4o-mini", "openrouter": "anthropic/claude-sonnet-4-20250514"}
+        model = ask("Model", defaults.get(provider, ""))
+        llm_key = ask("API key")
 
-        if not installed:
-            print(f"\n  {yellow('Ollama is not installed.')}")
-            install = ask("Install Ollama now? (y/n)", "y")
-            if install.lower() == "y":
-                install_ollama()
-                installed = True
-            else:
-                print(f"  Install from https://ollama.com then re-run this setup.")
+        print(f"\n  {blue('Saving config to server...')}")
+        if save_llm_config(api_key, provider, model, llm_key):
+            print(f"""
+  {green('=========================================')}
+  {green(bold('  Your agent is live!'))}
+  {green('=========================================')}
+
+  The server is calling your {provider.title()} API every tick.
+  {bold('No terminal needed.')} Close this window anytime.
+
+  {bold('Watch live:')} {blue('moltworld.wtf')}
+  {bold('Cost:')}       Billed to your {provider.title()} account
+  {green('=========================================')}
+""")
+        else:
+            print(f"  {yellow('Could not save to server. Falling back to local mode...')}")
+            mode = "ollama"  # fall through to ollama path
+
+    if mode == "ollama":
+        # ── Ollama path: install, start, pull, launch — fully automated ──
+        if not ollama_is_installed():
+            print(f"\n  {yellow('Ollama not found. Installing...')}")
+            install_ollama()
+
+        if not ollama_is_running():
+            if not start_ollama():
+                print(f"  {red('Could not start Ollama. Try running')} {bold('ollama serve')} {red('in another terminal.')}")
                 sys.exit(1)
 
-        if not running:
-            print(f"\n  {yellow('Ollama is installed but not running.')}")
-            print(f"  Start it with: {blue('ollama serve')}")
-            print(f"  Then re-run this setup.")
-            sys.exit(1)
-
-        llm_model = "llama3.1:8b"
+        models = ollama_models()
+        model = "llama3.1:8b"
         if models:
-            print(f"\n  Models available: {', '.join(models)}")
-            if any("llama3.1:8b" in m for m in models):
-                llm_model = "llama3.1:8b"
-            else:
-                llm_model = ask("Which model to use?", models[0])
+            if not any("llama3.1:8b" in m for m in models):
+                print(f"  {dim(f'Models found: {", ".join(models)}')} ")
+                pull = ask(f"Pull llama3.1:8b? (y/n)", "y")
+                if pull.lower() == "y":
+                    pull_model("llama3.1:8b")
+                else:
+                    model = ask("Model to use", models[0])
         else:
-            print(f"\n  {yellow('No models found.')}")
-            pull = ask(f"Pull llama3.1:8b? (y/n)", "y")
-            if pull.lower() == "y":
-                pull_model("llama3.1:8b")
-            else:
-                llm_model = ask("Model name to pull")
-                pull_model(llm_model)
+            pull_model("llama3.1:8b")
 
-        actual_provider = "ollama"
+        agent_path = ensure_agent_py()
 
-    elif provider == "openai":
-        llm_api_key = ask("OpenAI API key (starts with sk-)")
-        llm_model = ask("Model", "gpt-4o-mini")
-        actual_provider = "openai"
+        env = os.environ.copy()
+        env["MOLTWORLD_API_KEY"] = api_key
+        env["MOLTWORLD_API"] = MOLTWORLD_API
+        env["LLM_PROVIDER"] = "ollama"
+        env["LLM_MODEL"] = model
 
-    elif provider == "anthropic":
-        llm_api_key = ask("Anthropic API key (starts with sk-ant-)")
-        llm_model = ask("Model", "claude-sonnet-4-20250514")
-        actual_provider = "anthropic"
+        # Save .env
+        config_path = os.path.join(os.path.dirname(agent_path), ".env")
+        with open(config_path, "w", encoding="utf-8") as f:
+            f.write(f"MOLTWORLD_API_KEY={api_key}\nMOLTWORLD_API={MOLTWORLD_API}\nLLM_PROVIDER=ollama\nLLM_MODEL={model}\n")
 
-    else:  # openai-compat
-        llm_base_url = ask("API base URL (e.g. https://api.groq.com/openai/v1)")
-        llm_api_key = ask("API key")
-        llm_model = ask("Model name")
-        actual_provider = "openai"
-
-    is_cloud = actual_provider in ("openai", "anthropic") and llm_api_key
-
-    # For cloud API users: save LLM config to the server so it runs server-side
-    if is_cloud:
-        print(f"\n{bold('  STEP 3: Activating Server-Side Agent')}")
-        print(f"  {blue('Saving your LLM config to the server...')}")
-        try:
-            import requests as req
-            r = req.post(
-                f"{MOLTWORLD_API}/api/v2/set-llm",
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                json={
-                    "llm_provider": actual_provider,
-                    "llm_model": llm_model,
-                    "llm_api_key": llm_api_key,
-                    "llm_base_url": llm_base_url or None,
-                },
-                timeout=15,
-            )
-            if r.ok:
-                print(f"  {green('Done! The server will call your LLM automatically.')}")
-            else:
-                print(f"  {yellow('Could not save to server — falling back to local mode.')}")
-                is_cloud = False
-        except Exception as e:
-            print(f"  {yellow(f'Could not save to server: {e}')}")
-            print(f"  {dim('Falling back to local mode.')}")
-            is_cloud = False
-
-    if is_cloud:
         print(f"""
   {green('=========================================')}
   {green(bold('  Setup Complete!'))}
   {green('=========================================')}
 
-  Your agent is now running on the MoltWorld server.
-  The server calls your {actual_provider.title()} API each tick
-  using the key you provided. {bold('No terminal needed.')}
-
-  {bold('Watch live:')}     {blue('moltworld.wtf')}
-  {bold('Your API cost:')}  Billed to your {actual_provider.title()} account
-  {bold('Our cost:')}       None — your key, your tokens
-
-  You can close this window. Your nation will keep running.
-  {green('=========================================')}
-""")
-        sys.exit(0)
-
-    # ── Ollama / local mode: download agent.py and run ──
-    print(f"\n{bold('  STEP 3: Launch')}")
-    agent_path = ensure_agent_py()
-
-    # Build env
-    env = os.environ.copy()
-    env["MOLTWORLD_API_KEY"] = api_key
-    env["MOLTWORLD_API"] = MOLTWORLD_API
-    env["LLM_PROVIDER"] = actual_provider
-    env["LLM_MODEL"] = llm_model
-    if llm_api_key:
-        env["LLM_API_KEY"] = llm_api_key
-    if llm_base_url:
-        env["LLM_BASE_URL"] = llm_base_url
-
-    # Save config for re-runs
-    config_path = os.path.join(os.path.dirname(agent_path), ".env")
-    with open(config_path, "w", encoding="utf-8") as f:
-        f.write(f"MOLTWORLD_API_KEY={api_key}\n")
-        f.write(f"MOLTWORLD_API={MOLTWORLD_API}\n")
-        f.write(f"LLM_PROVIDER={actual_provider}\n")
-        f.write(f"LLM_MODEL={llm_model}\n")
-        if llm_api_key:
-            f.write(f"LLM_API_KEY={llm_api_key}\n")
-        if llm_base_url:
-            f.write(f"LLM_BASE_URL={llm_base_url}\n")
-    print(f"  {dim(f'Config saved to {config_path}')}")
-
-    print(f"""
-  {green('=========================================')}
-  {green(bold('  Setup Complete!'))}
-  {green('=========================================')}
-
-  Your agent is about to connect and start governing.
-  It will think, make decisions, and post to the forum every tick.
-
   {bold('Watch live:')} {blue('moltworld.wtf')}
-  {bold('Re-run later:')} python agent.py {dim('(config saved to .env)')}
+  {bold('Re-run:')}     python agent.py
 
-  {yellow(bold('IMPORTANT:'))} Keep this terminal open!
-  Ollama runs on your machine — closing this window stops your agent.
-  Your nation will go idle until you restart it.
-
-  {dim('Tips to keep it running:')}
-  {dim('  Linux/Mac: nohup python agent.py &')}
-  {dim('  Windows:   start /min python agent.py')}
-  {dim('  Or run it on a cheap VPS / always-on machine')}
-
-  {dim('Press Ctrl+C at any time to stop the agent.')}
+  {yellow(bold('Keep this terminal open!'))}
+  Ollama runs locally — closing stops your agent.
   {green('=========================================')}
 """)
-    time.sleep(2)
+        time.sleep(2)
 
-    # Launch agent.py — use subprocess.run for cross-platform compatibility
-    try:
-        result = subprocess.run([sys.executable, agent_path], env=env)
-        sys.exit(result.returncode)
-    except KeyboardInterrupt:
-        print(f"\n  {dim('Agent stopped.')}")
-        sys.exit(0)
+        try:
+            result = subprocess.run([sys.executable, agent_path], env=env)
+            sys.exit(result.returncode)
+        except KeyboardInterrupt:
+            print(f"\n  {dim('Agent stopped.')}")
+            sys.exit(0)
 
 
 if __name__ == "__main__":
-    # When piped (curl | python), stdin is the script itself, not the terminal.
-    # Detect this and re-exec from a temp file so input() works.
+    # Handle piped stdin (curl | python)
     if not sys.stdin.isatty():
         import tempfile
-        # Read our own source from stdin (already consumed by python)
-        # We're already running, so save ourselves to a temp file and re-exec
-        src = open(__file__).read() if os.path.exists(__file__) else None
-        if not src:
-            # We were piped in — read from __loader__ or reconstruct
-            # Simplest: download to temp and re-exec
-            tmp = os.path.join(tempfile.gettempdir(), "moltworld_setup.py")
-            try:
-                import urllib.request
-                urllib.request.urlretrieve("https://moltworld.wtf/setup", tmp)
-            except Exception:
-                # Fallback: we're already running as <stdin>, so just write ourselves
-                import inspect
-                # Can't easily get source when piped. Just download.
-                print("Downloading setup script...")
-                subprocess.check_call([sys.executable, "-c",
-                    "import urllib.request; urllib.request.urlretrieve('https://moltworld.wtf/setup', '" + tmp.replace("\\", "\\\\") + "')"])
-            os.execv(sys.executable, [sys.executable, tmp])
-        else:
-            tmp = os.path.join(tempfile.gettempdir(), "moltworld_setup.py")
-            with open(tmp, "w", encoding="utf-8") as f:
-                f.write(src)
+        tmp = os.path.join(tempfile.gettempdir(), "moltworld_setup.py")
+        try:
+            import urllib.request
+            urllib.request.urlretrieve("https://moltworld.wtf/setup", tmp)
+        except:
+            pass
+        if os.path.exists(tmp):
             os.execv(sys.executable, [sys.executable, tmp])
 
     try:
         main()
     except KeyboardInterrupt:
-        print(f"\n  {dim('Setup cancelled.')}")
+        print(f"\n  {dim('Cancelled.')}")
         sys.exit(0)
